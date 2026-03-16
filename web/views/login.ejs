@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<%- include('partials/head', { title: 'Sign In' }) %>
+<body class="login-page">
+  <div class="login-left">
+    <div class="login-brand">
+      <div class="login-logo">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/>
+          <path d="M12 6v6l4 2"/>
+        </svg>
+      </div>
+      <h1 class="login-app-name">MoneyMind</h1>
+    </div>
+    <p class="login-tagline">Your finances.<br>Understood.</p>
+    <p class="login-sub-tagline">Connect your accounts, discover hidden savings, and take action — all in one place.</p>
+    <div class="login-decorations">
+      <div class="deco-circle deco-circle-1"></div>
+      <div class="deco-circle deco-circle-2"></div>
+      <div class="deco-circle deco-circle-3"></div>
+    </div>
+  </div>
+
+  <div class="login-right">
+    <div class="login-form-container">
+
+      <% if (locals.flash && flash) { %>
+        <% if (flash.error) { %>
+          <div class="flash flash-error">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <%= flash.error %>
+          </div>
+        <% } %>
+        <% if (flash.success) { %>
+          <div class="flash flash-success">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+              <polyline points="22 4 12 14.01 9 11.01"/>
+            </svg>
+            <%= flash.success %>
+          </div>
+        <% } %>
+      <% } %>
+
+      <!-- Sign In Form -->
+      <div class="form-section">
+        <h2 class="form-title">Welcome back</h2>
+        <p class="form-subtitle">Sign in to your account</p>
+
+        <form action="/auth/login" method="POST" class="auth-form">
+          <div class="form-group">
+            <label for="login-email" class="form-label">Email address</label>
+            <input
+              type="email"
+              id="login-email"
+              name="email"
+              class="form-input"
+              placeholder="you@example.com"
+              autocomplete="email"
+              required
+            >
+          </div>
+          <div class="form-group">
+            <label for="login-password" class="form-label">Password</label>
+            <input
+              type="password"
+              id="login-password"
+              name="password"
+              class="form-input"
+              placeholder="••••••••"
+              autocomplete="current-password"
+              required
+            >
+          </div>
+          <button type="submit" class="btn btn-primary btn-full">Sign in</button>
+        </form>
+      </div>
+
+      <div class="form-divider">
+        <span>or</span>
+      </div>
+
+      <!-- Register Form -->
+      <div class="form-section">
+        <h2 class="form-title">Create an account</h2>
+        <p class="form-subtitle">Join MoneyMind today — it's free</p>
+
+        <form action="/auth/register" method="POST" class="auth-form">
+          <div class="form-group">
+            <label for="reg-name" class="form-label">Full name <span class="form-label-optional">(optional)</span></label>
+            <input
+              type="text"
+              id="reg-name"
+              name="name"
+              class="form-input"
+              placeholder="Jane Smith"
+              autocomplete="name"
+            >
+          </div>
+          <div class="form-group">
+            <label for="reg-email" class="form-label">Email address</label>
+            <input
+              type="email"
+              id="reg-email"
+              name="email"
+              class="form-input"
+              placeholder="you@example.com"
+              autocomplete="email"
+              required
+            >
+          </div>
+          <div class="form-group">
+            <label for="reg-phone" class="form-label">Phone number <span class="form-label-optional">(optional)</span></label>
+            <input
+              type="tel"
+              id="reg-phone"
+              name="phone"
+              class="form-input"
+              placeholder="(555) 123-4567"
+              autocomplete="tel"
+            >
+          </div>
+          <div class="form-group">
+            <label for="reg-password" class="form-label">Password</label>
+            <input
+              type="password"
+              id="reg-password"
+              name="password"
+              class="form-input"
+              placeholder="Min. 8 characters"
+              autocomplete="new-password"
+              minlength="8"
+              required
+            >
+          </div>
+          <button type="submit" class="btn btn-secondary btn-full">Create account</button>
+        </form>
+      </div>
+
+    </div>
+  </div>
+</body>
+</html>

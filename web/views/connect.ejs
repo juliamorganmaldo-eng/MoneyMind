@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<%- include('partials/head', { title: title }) %>
+<body class="app-page">
+  <div class="app-layout">
+    <%- include('partials/sidebar', { page: page }) %>
+
+    <main class="main-content">
+      <div class="page-inner">
+
+        <% if (locals.flash && flash) { %>
+          <% if (flash.error) { %>
+            <div class="flash flash-error">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              <%= flash.error %>
+            </div>
+          <% } %>
+          <% if (flash.success) { %>
+            <div class="flash flash-success">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+              </svg>
+              <%= flash.success %>
+            </div>
+          <% } %>
+        <% } %>
+
+        <div class="page-header">
+          <div class="page-header-text">
+            <h1 class="page-title">Connected Accounts</h1>
+            <p class="page-subtitle">Link your bank accounts to start discovering insights</p>
+          </div>
+          <button id="add-account-btn" class="btn btn-primary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            Add Account
+          </button>
+        </div>
+
+        <% if (accounts.length === 0) { %>
+          <div class="empty-state">
+            <div class="empty-icon">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+              </svg>
+            </div>
+            <h3 class="empty-title">No accounts connected</h3>
+            <p class="empty-desc">Connect your first bank account to get started with MoneyMind.</p>
+            <button id="add-account-empty-btn" class="btn btn-primary">Connect your first account</button>
+          </div>
+        <% } else { %>
+          <div class="accounts-grid">
+            <% accounts.forEach(function(account) { %>
+              <div class="account-card" data-account-id="<%= account.id %>">
+                <div class="account-card-icon">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="2" y="5" width="20" height="14" rx="2"/>
+                    <line x1="2" y1="10" x2="22" y2="10"/>
+                  </svg>
+                </div>
+                <div class="account-card-info">
+                  <h3 class="account-institution"><%= account.institution %></h3>
+                  <p class="account-date">Connected <%= new Date(account.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) %></p>
+                </div>
+                <button class="btn btn-danger disconnect-btn" data-account-id="<%= account.id %>">
+                  Disconnect
+                </button>
+              </div>
+            <% }); %>
+          </div>
+        <% } %>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
+  <script>
+    async function openPlaidLink() {
+      try {
+        const res = await fetch('/accounts/link-token');
+        if (!res.ok) {
+          alert('Failed to initialize Plaid Link. Please check your Plaid credentials.');
+          return;
+        }
+        const data = await res.json();
+        if (!data.link_token) {
+          alert('Failed to get link token.');
+          return;
+        }
+
+        const handler = Plaid.create({
+          token: data.link_token,
+          onSuccess: async function(publicToken, metadata) {
+            const institutionName = metadata.institution ? metadata.institution.name : 'Unknown Institution';
+            try {
+              const exchangeRes = await fetch('/accounts/exchange', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ public_token: publicToken, institution_name: institutionName })
+              });
+              if (exchangeRes.ok) {
+                window.location.reload();
+              } else {
+                const errData = await exchangeRes.json();
+                alert('Failed to connect account: ' + (errData.error || 'Unknown error'));
+              }
+            } catch (err) {
+              alert('Error connecting account: ' + err.message);
+            }
+          },
+          onExit: function(err, metadata) {
+            if (err != null) {
+              console.error('Plaid Link exit error:', err);
+            }
+          },
+          onEvent: function(eventName, metadata) {
+            console.log('Plaid event:', eventName, metadata);
+          }
+        });
+
+        handler.open();
+      } catch (err) {
+        alert('Failed to initialize Plaid Link: ' + err.message);
+      }
+    }
+
+    const addBtn = document.getElementById('add-account-btn');
+    if (addBtn) {
+      addBtn.addEventListener('click', openPlaidLink);
+    }
+
+    const addEmptyBtn = document.getElementById('add-account-empty-btn');
+    if (addEmptyBtn) {
+      addEmptyBtn.addEventListener('click', openPlaidLink);
+    }
+
+    document.querySelectorAll('.disconnect-btn').forEach(function(btn) {
+      btn.addEventListener('click', async function() {
+        const accountId = this.getAttribute('data-account-id');
+        if (!confirm('Are you sure you want to disconnect this account?')) return;
+
+        try {
+          const res = await fetch('/accounts/' + accountId, { method: 'DELETE' });
+          if (res.ok) {
+            const card = document.querySelector('.account-card[data-account-id="' + accountId + '"]');
+            if (card) {
+              card.style.transition = 'opacity 0.3s ease';
+              card.style.opacity = '0';
+              setTimeout(function() {
+                card.remove();
+                const grid = document.querySelector('.accounts-grid');
+                if (grid && grid.children.length === 0) {
+                  window.location.reload();
+                }
+              }, 300);
+            }
+          } else {
+            alert('Failed to disconnect account.');
+          }
+        } catch (err) {
+          alert('Error disconnecting account: ' + err.message);
+        }
+      });
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "moneymind": {
+      "command": "node",
+      "args": ["--experimental-sqlite", "server.js"],
+      "cwd": "/Users/juliamaldonado/moneymind-mcp"
+    }
+  }
+}

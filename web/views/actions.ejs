@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<%- include('partials/head', { title: 'Action Centre' }) %>
+<body class="app-page">
+  <div class="app-layout">
+    <%- include('partials/sidebar', { page: 'actions' }) %>
+
+    <main class="main-content">
+      <div class="page-inner">
+
+        <div class="page-header">
+          <div class="page-header-text">
+            <h1 class="page-title">Action Centre</h1>
+            <p class="page-subtitle">Emails, dispute letters, and call scripts drafted for you</p>
+          </div>
+        </div>
+
+        <div class="tab-bar">
+          <a href="/actions" class="tab <%= activeStatus === 'all' ? 'active' : '' %>">All</a>
+          <a href="/actions?status=draft" class="tab <%= activeStatus === 'draft' ? 'active' : '' %>">Draft</a>
+          <a href="/actions?status=sent" class="tab <%= activeStatus === 'sent' ? 'active' : '' %>">Sent</a>
+          <a href="/actions?status=resolved" class="tab <%= activeStatus === 'resolved' ? 'active' : '' %>">Resolved</a>
+        </div>
+
+        <% if (actions.length === 0) { %>
+          <div class="empty-state">
+            <div class="empty-icon">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+              </svg>
+            </div>
+            <h3 class="empty-title">No action drafts yet</h3>
+            <p class="empty-desc">Use the MCP tools to draft negotiation emails, dispute letters, or phone scripts.</p>
+          </div>
+        <% } else { %>
+          <div class="actions-list">
+            <% actions.forEach(function(a) { %>
+              <%
+                var typeBadge = 'badge-other';
+                if (a.type === 'email') typeBadge = 'badge-email';
+                else if (a.type === 'dispute_letter') typeBadge = 'badge-dispute';
+                else if (a.type === 'phone_script') typeBadge = 'badge-script';
+              %>
+              <div class="action-card" data-action-id="<%= a.id %>">
+                <div class="action-header" onclick="toggleAction(this)">
+                  <div class="action-header-left">
+                    <span class="badge <%= typeBadge %>"><%= a.type.replace(/_/g, ' ') %></span>
+                    <span class="action-merchant"><%= a.merchant %></span>
+                  </div>
+                  <div class="action-header-right">
+                    <span class="badge badge-status-<%= a.status %>"><%= a.status %></span>
+                    <span class="action-date"><%= new Date(a.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) %></span>
+                    <span class="action-chevron">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="6 9 12 15 18 9"/>
+                      </svg>
+                    </span>
+                  </div>
+                </div>
+                <div class="action-body" style="display:none;">
+                  <pre class="action-content"><%= a.content %></pre>
+                  <div class="action-controls">
+                    <% if (a.status === 'draft') { %>
+                      <button class="btn btn-primary btn-sm" onclick="updateStatus(<%= a.id %>, 'sent', this)">Mark as Sent</button>
+                      <button class="btn btn-secondary btn-sm" onclick="updateStatus(<%= a.id %>, 'resolved', this)">Mark as Resolved</button>
+                    <% } else if (a.status === 'sent') { %>
+                      <button class="btn btn-primary btn-sm" onclick="updateStatus(<%= a.id %>, 'resolved', this)">Mark as Resolved</button>
+                    <% } else { %>
+                      <span class="action-resolved-label">Resolved</span>
+                    <% } %>
+                  </div>
+                </div>
+              </div>
+            <% }); %>
+          </div>
+        <% } %>
+
+      </div>
+    </main>
+  </div>
+
+  <script>
+    function toggleAction(header) {
+      var body = header.nextElementSibling;
+      var chevron = header.querySelector('.action-chevron');
+      var isOpen = body.style.display !== 'none';
+      body.style.display = isOpen ? 'none' : 'block';
+      chevron.classList.toggle('open', !isOpen);
+    }
+
+    async function updateStatus(id, status, btn) {
+      try {
+        var res = await fetch('/actions/' + id + '/status', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: status })
+        });
+        if (res.ok) {
+          window.location.reload();
+        } else {
+          alert('Failed to update status.');
+        }
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    }
+  </script>
+</body>
+</html>

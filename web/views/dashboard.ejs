@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<%- include('partials/head', { title: 'Dashboard' }) %>
+<body class="app-page">
+  <div class="app-layout">
+    <%- include('partials/sidebar', { page: 'dashboard' }) %>
+
+    <main class="main-content">
+      <div class="page-inner">
+
+        <% if (locals.flash && flash) { %>
+          <% if (flash.error) { %>
+            <div class="flash flash-error"><%= flash.error %></div>
+          <% } %>
+          <% if (flash.success) { %>
+            <div class="flash flash-success"><%= flash.success %></div>
+          <% } %>
+        <% } %>
+
+        <div class="page-header">
+          <div class="page-header-text">
+            <h1 class="page-title">Dashboard</h1>
+            <p class="page-subtitle">Welcome back, <%= user.name || user.email %></p>
+          </div>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-number"><%= stats.accounts %></div>
+            <div class="stat-label">Connected Accounts</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-number"><%= stats.findings %></div>
+            <div class="stat-label">Findings</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-number"><%= stats.actions %></div>
+            <div class="stat-label">Action Drafts</div>
+          </div>
+        </div>
+
+        <div class="two-col">
+          <div class="panel">
+            <div class="panel-header">
+              <h2 class="panel-title">Recent Findings</h2>
+              <a href="/findings" class="panel-link">View all</a>
+            </div>
+            <% if (recentFindings.length === 0) { %>
+              <div class="panel-empty">No findings yet. Connect accounts and run an analysis to discover insights.</div>
+            <% } else { %>
+              <div class="panel-list">
+                <% recentFindings.forEach(function(f) { %>
+                  <div class="panel-item">
+                    <span class="badge badge-<%= f.type === 'recurring' ? 'recurring' : f.type === 'duplicate_subscription' ? 'duplicate' : f.type === 'price_change' ? 'price' : 'other' %>"><%= f.type.replace(/_/g, ' ') %></span>
+                    <span class="panel-item-title"><%= f.title %></span>
+                    <span class="panel-item-date"><%= new Date(f.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) %></span>
+                  </div>
+                <% }); %>
+              </div>
+            <% } %>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header">
+              <h2 class="panel-title">Recent Actions</h2>
+              <a href="/actions" class="panel-link">View all</a>
+            </div>
+            <% if (recentActions.length === 0) { %>
+              <div class="panel-empty">No action drafts yet. Use the MCP tools to draft emails, dispute letters, or call scripts.</div>
+            <% } else { %>
+              <div class="panel-list">
+                <% recentActions.forEach(function(a) { %>
+                  <div class="panel-item">
+                    <span class="badge badge-<%= a.type === 'email' ? 'email' : a.type === 'dispute_letter' ? 'dispute' : 'script' %>"><%= a.type.replace(/_/g, ' ') %></span>
+                    <span class="panel-item-title"><%= a.merchant %></span>
+                    <span class="badge badge-status-<%= a.status %>"><%= a.status %></span>
+                    <span class="panel-item-date"><%= new Date(a.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) %></span>
+                  </div>
+                <% }); %>
+              </div>
+            <% } %>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+</body>
+</html>

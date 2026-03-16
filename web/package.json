@@ -1,0 +1,18 @@
+{
+  "name": "moneymind-web",
+  "version": "1.0.0",
+  "description": "MoneyMind web application",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon app.js"
+  },
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "dotenv": "^16.0.0",
+    "ejs": "^3.1.9",
+    "express": "^4.18.2",
+    "express-session": "^1.17.3",
+    "plaid": "^17.0.0"
+  }
+}
