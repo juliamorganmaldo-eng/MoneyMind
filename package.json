@@ -4,7 +4,7 @@
   "description": "MCP server for MoneyMind — Plaid transaction sync and financial analysis",
   "main": "server.js",
   "scripts": {
-    "start": "node --experimental-sqlite web/app.js"
+    "start": "cd web && npm install && node app.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
