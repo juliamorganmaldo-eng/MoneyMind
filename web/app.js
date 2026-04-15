@@ -20,6 +20,7 @@ const transactionsRouter = require('./routes/transactions');
 const goalsRouter = require('./routes/goals');
 const notificationsRouter = require('./routes/notifications');
 const adminRouter = require('./routes/admin');
+const adminSetupRouter = require('./routes/admin-setup');
 const { scheduleMonthlyReports } = require('./lib/monthly-report');
 const { bootstrap } = require('./lib/bootstrap');
 
@@ -81,6 +82,7 @@ app.use('/spending', spendingRouter);
 app.use('/transactions', transactionsRouter);
 app.use('/goals', goalsRouter);
 app.use('/notifications', notificationsRouter);
+app.use('/admin-setup', adminSetupRouter);
 app.use('/admin', adminRouter);
 
 // Root redirect
