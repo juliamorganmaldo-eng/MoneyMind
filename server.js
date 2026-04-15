@@ -24,7 +24,6 @@ const plaidClient = new PlaidApi(new Configuration({
 const ACCOUNTS = {
   chase:       process.env.PLAID_ACCESS_TOKEN_CHASE,
   wells_fargo: process.env.PLAID_ACCESS_TOKEN_WELLS_FARGO,
-  discover:    process.env.PLAID_ACCESS_TOKEN_DISCOVER,
 };
 
 const anthropic   = new Anthropic(); // reads ANTHROPIC_API_KEY from env
@@ -100,26 +99,72 @@ async function syncTransactions({ days_back = 90 } = {}) {
   return results;
 }
 
-function detectRecurringCharges({ min_occurrences = 2 } = {}) {
+const TRANSFER_KEYWORDS = ['transfer', 'xfer', 'overdraft', 'zelle', 'payment to', 'venmo', 'cash app', 'wire'];
+const ONE_TIME_BOOKING_MERCHANTS = ['airbnb', 'vrbo', 'booking.com', 'hotels.com', 'marriott', 'hilton', 'hyatt', 'expedia', 'priceline', 'kayak', 'ihg'];
+const TRANSFER_CATEGORY_KEYWORDS = ['transfer', 'payment', 'credit card payment', 'overdraft', 'loan payment'];
+
+function isTransferOrPayment(merchant, category, rawJson) {
+  const m = (merchant || '').toLowerCase();
+  const c = (category || '').toLowerCase();
+  if (c.includes('transfer') || c.includes('bank fees')) return true;
+  if (TRANSFER_CATEGORY_KEYWORDS.some(k => c.includes(k))) return true;
+  if (TRANSFER_KEYWORDS.some(k => m.includes(k))) return true;
+  let raw = {};
+  try { raw = rawJson ? JSON.parse(rawJson) : {}; } catch (_) {}
+  if (raw.transaction_type === 'special') return true;
+  const pfc = raw.personal_finance_category && raw.personal_finance_category.primary;
+  if (pfc === 'TRANSFER_IN' || pfc === 'TRANSFER_OUT' || pfc === 'BANK_FEES' || pfc === 'LOAN_PAYMENTS') return true;
+  if (TRANSFER_KEYWORDS.some(k => (raw.name || '').toLowerCase().includes(k))) return true;
+  return false;
+}
+
+function isOneTimeBookingMerchant(merchant) {
+  const m = (merchant || '').toLowerCase();
+  return ONE_TIME_BOOKING_MERCHANTS.some(k => m.includes(k));
+}
+
+function detectRecurringCharges({ min_occurrences = 2, amount_tolerance_pct = 5 } = {}) {
   const rows = db.prepare(`
-    SELECT merchant, account, date, amount
+    SELECT merchant, account, date, amount, category, raw_json
     FROM transactions
     ORDER BY merchant, date
   `).all();
 
-  // Group by normalized merchant
+  // Group by normalized merchant, filtering out transfers/payments and one-time booking merchants up front
   const byMerchant = {};
   for (const row of rows) {
+    if (isTransferOrPayment(row.merchant, row.category, row.raw_json)) continue;
+    if (isOneTimeBookingMerchant(row.merchant)) continue;
     const key = normalizeMerchant(row.merchant);
     if (!byMerchant[key]) byMerchant[key] = [];
     byMerchant[key].push(row);
   }
 
   const recurring = [];
-  for (const [merchant, txns] of Object.entries(byMerchant)) {
+  for (const [, txns] of Object.entries(byMerchant)) {
     if (txns.length < min_occurrences) continue;
 
-    const dates = txns.map(t => new Date(t.date).getTime()).sort((a, b) => a - b);
+    // Group transactions into amount-bands within tolerance; only keep the largest band
+    const sortedByAmt = txns.slice().sort((a, b) => a.amount - b.amount);
+    const bands = [];
+    for (const t of sortedByAmt) {
+      const band = bands.find(b => {
+        const min = Math.min(b.avg, t.amount);
+        if (min <= 0) return false;
+        return Math.abs(t.amount - b.avg) / min * 100 <= amount_tolerance_pct;
+      });
+      if (band) {
+        band.items.push(t);
+        band.avg = band.items.reduce((s, x) => s + x.amount, 0) / band.items.length;
+      } else {
+        bands.push({ avg: t.amount, items: [t] });
+      }
+    }
+    const band = bands.sort((a, b) => b.items.length - a.items.length)[0];
+    if (!band || band.items.length < min_occurrences) continue;
+
+    const bandTxns = band.items.slice().sort((a, b) => new Date(a.date) - new Date(b.date));
+    const dates = bandTxns.map(t => new Date(t.date).getTime());
     const gaps  = [];
     for (let i = 1; i < dates.length; i++) {
       gaps.push(Math.round((dates[i] - dates[i - 1]) / 86400000));
@@ -128,17 +173,23 @@ function detectRecurringCharges({ min_occurrences = 2 } = {}) {
     const interval = detectInterval(gaps);
     if (!interval) continue;
 
-    const amounts  = txns.map(t => t.amount);
-    const avgAmt   = amounts.reduce((s, a) => s + a, 0) / amounts.length;
-    const accounts = [...new Set(txns.map(t => t.account))];
+    const amounts = bandTxns.map(t => t.amount);
+    const avgAmt  = amounts.reduce((s, a) => s + a, 0) / amounts.length;
+    const minAmt  = Math.min(...amounts);
+    const maxAmt  = Math.max(...amounts);
+    const variancePct = minAmt > 0 ? ((maxAmt - minAmt) / minAmt) * 100 : 0;
+    if (variancePct > amount_tolerance_pct) continue;
+
+    const accounts = [...new Set(bandTxns.map(t => t.account))];
 
     recurring.push({
-      merchant:   txns[0].merchant,
+      merchant:        bandTxns[0].merchant,
       interval,
-      occurrences: txns.length,
-      avg_amount:  parseFloat(avgAmt.toFixed(2)),
+      occurrences:     bandTxns.length,
+      avg_amount:      parseFloat(avgAmt.toFixed(2)),
+      amount_variance_pct: parseFloat(variancePct.toFixed(2)),
       accounts,
-      last_charge: txns[txns.length - 1].date,
+      last_charge:     bandTxns[bandTxns.length - 1].date,
     });
   }
 
@@ -372,6 +423,537 @@ function getSavedActions() {
     .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
 }
 
+const { DatabaseSync } = require('node:sqlite');
+const WEB_DB_PATH = path.join(__dirname, 'web', 'moneymind-web.db');
+let webDb = null;
+function getWebDb() {
+  if (!webDb) webDb = new DatabaseSync(WEB_DB_PATH);
+  return webDb;
+}
+
+const INVESTMENT_MERCHANTS = ['robinhood', 'vanguard'];
+
+function estimateMonthlyInvestmentContribution() {
+  const now = new Date();
+  let total = 0, buckets = 0;
+  for (let k = 1; k <= 3; k++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - k, 1);
+    const y = d.getFullYear(), m = d.getMonth() + 1;
+    const start = `${y}-${String(m).padStart(2, '0')}-01`;
+    const end   = `${y}-${String(m).padStart(2, '0')}-31`;
+    const rows = db.prepare(
+      'SELECT merchant, amount FROM transactions WHERE date >= ? AND date <= ?'
+    ).all(start, end);
+    let monthTotal = 0;
+    for (const r of rows) {
+      const merch = (r.merchant || '').toLowerCase();
+      if (r.amount > 0 && INVESTMENT_MERCHANTS.some(g => merch.includes(g))) monthTotal += r.amount;
+    }
+    total += monthTotal;
+    buckets++;
+  }
+  return buckets > 0 ? parseFloat((total / buckets).toFixed(2)) : 0;
+}
+
+function requiredMonthlyContribution(target, progress, months, annualReturn) {
+  const i = annualReturn / 12;
+  const growth = Math.pow(1 + i, months);
+  const remaining = target - progress * growth;
+  if (remaining <= 0) return 0;
+  if (i === 0) return remaining / months;
+  return (remaining * i) / (growth - 1);
+}
+
+function calculateGoalGap({ user_id }) {
+  if (!user_id) throw new Error('user_id is required');
+  const wdb = getWebDb();
+
+  const goals = wdb.prepare(
+    'SELECT id, goal_type, name, target_amount, current_progress, target_date FROM goals WHERE user_id = ?'
+  ).all(user_id);
+
+  const ledger = wdb.prepare(
+    'SELECT savings_type, amount FROM savings_ledger WHERE user_id = ?'
+  ).all(user_id);
+
+  const ledgerMonthlyPool = ledger
+    .filter(r => r.savings_type === 'recurring_monthly')
+    .reduce((s, r) => s + Number(r.amount), 0);
+
+  const currentMonthly = estimateMonthlyInvestmentContribution();
+  const now = new Date();
+
+  const results = goals.map(g => {
+    const target = new Date(g.target_date);
+    const months = Math.max(1, (target.getFullYear() - now.getFullYear()) * 12 + (target.getMonth() - now.getMonth()));
+    const years  = months / 12;
+
+    const rate = years < 5 ? 0.045 : 0.07;
+    const horizon = years < 5 ? 'short_term (HYSA 4.5%)' : 'long_term (7% growth)';
+
+    const required = requiredMonthlyContribution(
+      Number(g.target_amount),
+      Number(g.current_progress || 0),
+      months,
+      rate
+    );
+
+    const delta = required - currentMonthly; // positive = shortfall, negative = surplus
+    const shortfall = delta > 0 ? delta : 0;
+    const surplus   = delta < 0 ? -delta : 0;
+    const ledger_can_cover = Math.min(shortfall, ledgerMonthlyPool);
+    const remaining_gap    = Math.max(0, shortfall - ledger_can_cover);
+
+    let flag = null;
+    if (shortfall > 0 && ledger_can_cover >= shortfall) flag = 'ledger_closes_full_gap';
+    else if (shortfall > 0 && ledger_can_cover > 0)    flag = 'ledger_closes_partial_gap';
+
+    return {
+      goal_id:           g.id,
+      goal_type:         g.goal_type,
+      name:              g.name,
+      target_amount:     Number(g.target_amount),
+      current_progress:  Number(g.current_progress || 0),
+      target_date:       g.target_date,
+      months_remaining:  months,
+      horizon,
+      assumed_annual_return: rate,
+      required_monthly:  parseFloat(required.toFixed(2)),
+      current_monthly:   currentMonthly,
+      monthly_shortfall: parseFloat(shortfall.toFixed(2)),
+      monthly_surplus:   parseFloat(surplus.toFixed(2)),
+      ledger_can_cover:  parseFloat(ledger_can_cover.toFixed(2)),
+      remaining_gap:     parseFloat(remaining_gap.toFixed(2)),
+      flag,
+    };
+  });
+
+  return {
+    user_id,
+    current_monthly_contribution: currentMonthly,
+    ledger_monthly_pool: parseFloat(ledgerMonthlyPool.toFixed(2)),
+    goals: results,
+  };
+}
+
+const TOTAL_MARKET_FUNDS = {
+  vanguard:   { ticker: 'VTI',    name: 'Vanguard Total Stock Market ETF',       expense_ratio: 0.03 },
+  vanguard_mf:{ ticker: 'VTSAX',  name: 'Vanguard Total Stock Market Index Fund',expense_ratio: 0.04 },
+  fidelity:   { ticker: 'FSKAX',  name: 'Fidelity Total Market Index Fund',      expense_ratio: 0.015 },
+  schwab:     { ticker: 'SWTSX',  name: 'Schwab Total Stock Market Index',       expense_ratio: 0.03 },
+  ishares:    { ticker: 'ITOT',   name: 'iShares Core S&P Total U.S. Stock ETF', expense_ratio: 0.03 },
+};
+
+const BALANCED_FUNDS = {
+  vanguard:  { ticker: 'VBIAX', name: 'Vanguard Balanced Index Fund (60/40)',   expense_ratio: 0.07 },
+  fidelity:  { ticker: 'FBALX', name: 'Fidelity Balanced Fund',                 expense_ratio: 0.48 },
+  ishares:   { ticker: 'AOR',   name: 'iShares Core Growth Allocation (60/40)', expense_ratio: 0.15 },
+};
+
+const HYSA_OPTIONS = [
+  { name: 'Ally Bank Savings',            apy_est: 4.2, fdic_insured: true },
+  { name: 'Marcus by Goldman Sachs',      apy_est: 4.3, fdic_insured: true },
+  { name: 'Wealthfront Cash Account',     apy_est: 4.5, fdic_insured: true },
+  { name: 'Capital One 360 Performance',  apy_est: 4.1, fdic_insured: true },
+];
+
+// Industry-average expense ratio for actively managed equity mutual funds (ICI, most recent)
+const ACTIVE_MF_AVG_ER = 0.66;
+
+function vanguardTargetDateFund(retirementYear) {
+  const bucket = Math.round(retirementYear / 5) * 5;
+  const y2 = String(bucket).slice(-2);
+  return { ticker: `VFFVX`.replace('55', y2), name: `Vanguard Target Retirement ${bucket} Fund`, expense_ratio: 0.08, target_year: bucket };
+}
+
+function recommendFund({
+  account_type,
+  time_horizon_years,
+  risk_tolerance = 'moderate',
+  brokerage = 'vanguard',
+  retirement_year,
+}) {
+  if (!account_type) throw new Error('account_type is required');
+  if (time_horizon_years == null) throw new Error('time_horizon_years is required');
+
+  const acct = account_type.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const years = Number(time_horizon_years);
+  const brok  = (brokerage || 'vanguard').toLowerCase();
+
+  const disclaimer = 'Past performance does not guarantee future results. This is general educational information, not personalized investment advice. Confirm suitability with a fiduciary advisor or your account provider before investing.';
+
+  // Hard rule: short horizon or cash account → HYSA, never equities
+  if (years < 5 || acct === 'hysa' || acct === 'highyieldsavings' || acct === 'savings') {
+    const top = HYSA_OPTIONS.slice().sort((a, b) => b.apy_est - a.apy_est);
+    return {
+      account_type,
+      time_horizon_years: years,
+      horizon_bucket: 'short_term (<5 yrs)',
+      recommendation: {
+        product_type: 'FDIC-insured high-yield savings account',
+        primary: top[0],
+        alternates: top.slice(1),
+        rationale: 'For horizons under 5 years, principal preservation matters more than return. Equities can draw down 30-40% in any given year, which is unacceptable when the money is needed soon. FDIC insurance protects up to $250k per depositor per bank.',
+      },
+      comparison_to_active: null,
+      disclaimer,
+    };
+  }
+
+  // Long horizon → total market index
+  if (years > 10) {
+    const fund = TOTAL_MARKET_FUNDS[brok] || TOTAL_MARKET_FUNDS.vanguard;
+    return {
+      account_type,
+      time_horizon_years: years,
+      horizon_bucket: 'long_term (>10 yrs)',
+      recommendation: {
+        product_type: 'Low-cost total market index fund',
+        primary: fund,
+        alternates: Object.values(TOTAL_MARKET_FUNDS).filter(f => f.ticker !== fund.ticker),
+        rationale: `Over 10+ year horizons, broad U.S. equity index funds have historically outperformed the vast majority of actively managed funds, largely because of fee drag. ${fund.ticker} holds essentially every publicly traded U.S. company at a ${fund.expense_ratio}% expense ratio, vs. the ~${ACTIVE_MF_AVG_ER}% industry average for active equity funds.`,
+      },
+      comparison_to_active: {
+        recommended_expense_ratio: fund.expense_ratio,
+        active_fund_average:       ACTIVE_MF_AVG_ER,
+        annual_savings_per_10k:    parseFloat(((ACTIVE_MF_AVG_ER - fund.expense_ratio) / 100 * 10000).toFixed(2)),
+        note: `On a $10,000 balance, the recommended fund costs roughly $${(fund.expense_ratio/100*10000).toFixed(2)}/yr vs. ~$${(ACTIVE_MF_AVG_ER/100*10000).toFixed(2)}/yr for the average active fund.`,
+      },
+      disclaimer,
+    };
+  }
+
+  // 5–10 yr horizon → balanced or target-date
+  const useTargetDate = !!retirement_year && acct !== 'taxablebrokerage' && acct !== 'taxable';
+  let primary, altList, productType, rationale;
+  if (useTargetDate) {
+    primary = vanguardTargetDateFund(Number(retirement_year));
+    altList = [BALANCED_FUNDS.vanguard, BALANCED_FUNDS.ishares];
+    productType = 'Target-date retirement fund';
+    rationale = `With a retirement year around ${primary.target_year} and a ${years}-year intermediate horizon, a target-date fund automatically glides from stocks to bonds as the date approaches, so you don't have to rebalance. Expense ratio ${primary.expense_ratio}%.`;
+  } else {
+    primary = BALANCED_FUNDS[brok] || BALANCED_FUNDS.vanguard;
+    altList = Object.values(BALANCED_FUNDS).filter(f => f.ticker !== primary.ticker).concat([vanguardTargetDateFund(new Date().getFullYear() + Math.round(years))]);
+    productType = 'Balanced index fund (roughly 60/40 stocks/bonds)';
+    rationale = `For a ${years}-year horizon with a ${risk_tolerance} risk tolerance, a 60/40 balanced index fund like ${primary.ticker} smooths drawdowns while still capturing equity growth. Expense ratio ${primary.expense_ratio}%.`;
+  }
+
+  return {
+    account_type,
+    time_horizon_years: years,
+    horizon_bucket: 'intermediate (5-10 yrs)',
+    recommendation: {
+      product_type: productType,
+      primary,
+      alternates: altList,
+      rationale,
+    },
+    comparison_to_active: {
+      recommended_expense_ratio: primary.expense_ratio,
+      active_fund_average:       ACTIVE_MF_AVG_ER,
+      annual_savings_per_10k:    parseFloat(((ACTIVE_MF_AVG_ER - primary.expense_ratio) / 100 * 10000).toFixed(2)),
+      note: `At ${primary.expense_ratio}% vs. the ~${ACTIVE_MF_AVG_ER}% active-fund average, you keep about $${(((ACTIVE_MF_AVG_ER - primary.expense_ratio) / 100) * 10000).toFixed(2)}/yr more per $10,000 invested.`,
+    },
+    disclaimer,
+  };
+}
+
+function estimateMonthlySpending() {
+  const now = new Date();
+  let total = 0, buckets = 0;
+  for (let k = 1; k <= 3; k++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - k, 1);
+    const y = d.getFullYear(), m = d.getMonth() + 1;
+    const start = `${y}-${String(m).padStart(2, '0')}-01`;
+    const end   = `${y}-${String(m).padStart(2, '0')}-31`;
+    const rows = db.prepare('SELECT merchant, amount, category FROM transactions WHERE date >= ? AND date <= ?').all(start, end);
+    let monthTotal = 0;
+    for (const r of rows) {
+      if (r.amount <= 0) continue;
+      const c = (r.category || '').toLowerCase();
+      const merch = (r.merchant || '').toLowerCase();
+      if (c.includes('transfer') || c.includes('payment') || c.includes('deposit')) continue;
+      if (INVESTMENT_MERCHANTS.some(g => merch.includes(g))) continue;
+      monthTotal += r.amount;
+    }
+    total += monthTotal; buckets++;
+  }
+  return buckets > 0 ? total / buckets : 0;
+}
+
+function routeSavingsToAccount({
+  monthly_amount,
+  user_id,
+  debts = [],                         // [{name, balance, apr}]
+  employer_match = null,              // {unused_monthly_match} or {percent, salary, current_contribution_pct}
+  emergency_fund_balance = 0,
+  monthly_spending,                   // optional override
+  roth_ira_ytd_contributed = 0,
+  roth_ira_eligible = true,
+  k401_ytd_contributed = 0,
+  k401_annual_limit = 24000,          // 2026 est.
+  roth_ira_annual_limit = 7000,       // 2026
+}) {
+  if (!(monthly_amount > 0)) throw new Error('monthly_amount must be > 0');
+
+  const now = new Date();
+  const monthsRemainingThisYear = 12 - now.getMonth(); // includes current
+  const spending = monthly_spending != null ? Number(monthly_spending) : estimateMonthlySpending();
+  const emergencyTarget = spending * 3;
+
+  let remaining = monthly_amount;
+  const allocations = [];
+  const alloc = (priority, account, amount, reason) => {
+    const amt = Math.min(amount, remaining);
+    if (amt <= 0) return;
+    allocations.push({
+      priority,
+      account,
+      monthly_amount: parseFloat(amt.toFixed(2)),
+      reason,
+    });
+    remaining = parseFloat((remaining - amt).toFixed(2));
+  };
+
+  // 1. High-interest debt (>8% APR)
+  const highApr = debts.filter(d => Number(d.apr) > 8 && Number(d.balance) > 0)
+                       .sort((a, b) => Number(b.apr) - Number(a.apr));
+  for (const d of highApr) {
+    if (remaining <= 0) break;
+    alloc(
+      1,
+      `Debt payoff — ${d.name}`,
+      remaining, // dump into highest-APR debt
+      `${d.name} carries ${d.apr}% APR, which is a guaranteed "return" higher than any market assumption. Paying down $${d.balance.toLocaleString()} here first avoids compounding interest charges.`
+    );
+  }
+
+  // 2. Unused employer 401(k) match
+  let unusedMatch = 0;
+  if (employer_match) {
+    if (employer_match.unused_monthly_match != null) {
+      unusedMatch = Number(employer_match.unused_monthly_match);
+    } else if (employer_match.percent != null && employer_match.salary != null) {
+      const fullMatchMonthly = (Number(employer_match.salary) * (Number(employer_match.percent) / 100)) / 12;
+      const currentMatchMonthly = employer_match.current_contribution_pct != null
+        ? (Number(employer_match.salary) * (Number(employer_match.current_contribution_pct) / 100)) / 12
+        : 0;
+      unusedMatch = Math.max(0, fullMatchMonthly - currentMatchMonthly);
+    }
+  }
+  if (remaining > 0 && unusedMatch > 0) {
+    alloc(
+      2,
+      '401(k) — capture employer match',
+      unusedMatch,
+      `You're leaving about $${unusedMatch.toFixed(0)}/mo of employer match on the table. That's a 100% instant return — no other account beats free money.`
+    );
+  }
+
+  // 3. Emergency fund to 3 months of spending (HYSA)
+  const emergencyGap = Math.max(0, emergencyTarget - emergency_fund_balance);
+  if (remaining > 0 && emergencyGap > 0) {
+    // Spread over up to 12 months so it's actionable, not a wall
+    const monthlyToEmergency = Math.min(remaining, emergencyGap / 12, remaining);
+    alloc(
+      3,
+      'High-yield savings account (emergency fund)',
+      Math.min(remaining, Math.max(monthlyToEmergency, Math.min(remaining, emergencyGap))),
+      `Your emergency fund of $${emergency_fund_balance.toLocaleString()} is short of the 3-month target ($${emergencyTarget.toLocaleString()} based on ~$${spending.toFixed(0)}/mo spending). Keep this in a HYSA (~4.5% APY) for liquidity.`
+    );
+  }
+
+  // 4. Roth IRA up to annual limit
+  if (remaining > 0 && roth_ira_eligible) {
+    const rothRemainingAnnual = Math.max(0, roth_ira_annual_limit - roth_ira_ytd_contributed);
+    const rothMonthlyCap = rothRemainingAnnual / monthsRemainingThisYear;
+    if (rothMonthlyCap > 0) {
+      alloc(
+        4,
+        'Roth IRA',
+        rothMonthlyCap,
+        `Roth IRA contributions grow tax-free and come out tax-free in retirement. You have $${rothRemainingAnnual.toFixed(0)} of 2026 headroom left (limit $${roth_ira_annual_limit}); splitting that across the ${monthsRemainingThisYear} remaining months works out to $${rothMonthlyCap.toFixed(0)}/mo.`
+      );
+    }
+  }
+
+  // 5. 401(k) up to annual limit (beyond the match)
+  if (remaining > 0) {
+    const k401RemainingAnnual = Math.max(0, k401_annual_limit - k401_ytd_contributed);
+    const k401MonthlyCap = k401RemainingAnnual / monthsRemainingThisYear;
+    if (k401MonthlyCap > 0) {
+      alloc(
+        5,
+        '401(k) — additional pre-tax contributions',
+        k401MonthlyCap,
+        `After the Roth, add more to your 401(k) for the pre-tax deduction. You have $${k401RemainingAnnual.toFixed(0)} of 2026 headroom ($${k401_annual_limit} limit), which is $${k401MonthlyCap.toFixed(0)}/mo across the rest of the year.`
+      );
+    }
+  }
+
+  // 6. Taxable brokerage
+  if (remaining > 0) {
+    alloc(
+      6,
+      'Taxable brokerage',
+      remaining,
+      `All tax-advantaged buckets for this year are full. Park remaining savings in a taxable brokerage (Vanguard/Robinhood) in broad index funds — fully liquid and still compounding.`
+    );
+  }
+
+  return {
+    monthly_amount,
+    user_id: user_id ?? null,
+    assumptions: {
+      monthly_spending: parseFloat(spending.toFixed(2)),
+      emergency_fund_target_3mo: parseFloat(emergencyTarget.toFixed(2)),
+      months_remaining_this_year: monthsRemainingThisYear,
+      roth_ira_annual_limit,
+      k401_annual_limit,
+    },
+    allocations,
+    unallocated_monthly: parseFloat(Math.max(0, remaining).toFixed(2)),
+  };
+}
+
+function recommendLumpSumDeployment({
+  amount,
+  user_id,
+  debts = [],
+  emergency_fund_balance = 0,
+  monthly_spending,
+  priority_investment_account = 'Roth IRA',
+  recommended_fund_ticker,
+  source_merchant,
+  credit_date,
+}) {
+  if (!(amount > 0)) throw new Error('amount must be > 0');
+
+  const spending = monthly_spending != null ? Number(monthly_spending) : estimateMonthlySpending();
+  const emergencyTarget = spending * 3;
+  const emergencyGap = Math.max(0, emergencyTarget - emergency_fund_balance);
+
+  const highApr = debts.filter(d => Number(d.apr) > 8 && Number(d.balance) > 0)
+                       .sort((a, b) => Number(b.apr) - Number(a.apr));
+
+  let destination, reason, applied_amount, leftover = 0;
+
+  if (highApr.length > 0) {
+    const top = highApr[0];
+    applied_amount = Math.min(amount, Number(top.balance));
+    leftover       = parseFloat((amount - applied_amount).toFixed(2));
+    destination    = `Debt payoff — ${top.name}`;
+    reason         = `${top.name} carries ${top.apr}% APR. Paying down $${applied_amount.toFixed(2)} of a $${Number(top.balance).toLocaleString()} balance is a guaranteed ${top.apr}% return — better than any market assumption. This is the first use of any windfall.`;
+  } else if (emergencyGap > 0) {
+    applied_amount = Math.min(amount, emergencyGap);
+    leftover       = parseFloat((amount - applied_amount).toFixed(2));
+    destination    = 'High-yield savings account (emergency fund)';
+    reason         = `Your emergency fund is $${emergency_fund_balance.toLocaleString()}, short of the 3-month target of $${emergencyTarget.toFixed(0)} (based on ~$${spending.toFixed(0)}/mo spending). Depositing $${applied_amount.toFixed(2)} into a HYSA closes $${applied_amount.toFixed(2)} of that gap while staying fully liquid and FDIC-insured.`;
+  } else {
+    applied_amount = amount;
+    destination    = priority_investment_account;
+    reason         = `No high-interest debt and emergency fund fully funded. Deploy the full $${amount.toFixed(2)} into your ${priority_investment_account}${recommended_fund_ticker ? ` (e.g. ${recommended_fund_ticker})` : ''}. A one-time lump sum invested now has decades to compound — the earlier it's in the market, the larger the tail.`;
+  }
+
+  const i = 0.07 / 12;
+  const fv = (n) => applied_amount * Math.pow(1 + i, n);
+  const growth = {
+    principal:    parseFloat(applied_amount.toFixed(2)),
+    ten_year:     { future_value: parseFloat(fv(120).toFixed(2)), growth: parseFloat((fv(120) - applied_amount).toFixed(2)) },
+    twenty_year:  { future_value: parseFloat(fv(240).toFixed(2)), growth: parseFloat((fv(240) - applied_amount).toFixed(2)) },
+    assumption:   'Compounded monthly at 7% annualized; real returns will vary.',
+  };
+
+  const today = new Date().toISOString().slice(0, 10);
+  const creditDate = credit_date || today;
+  const isSameDay = creditDate === today;
+
+  const notification = {
+    channel:      'in_app',
+    surfaced_at:  new Date().toISOString(),
+    same_day:     isSameDay,
+    title:        `New credit detected${source_merchant ? ` from ${source_merchant}` : ''}: $${amount.toFixed(2)}`,
+    body:         `MoneyMind recommends sending $${applied_amount.toFixed(2)} to "${destination}". ${destination.startsWith('Debt') ? '' : `Left untouched at 7%, that grows to about $${growth.ten_year.future_value.toLocaleString()} in 10 years and $${growth.twenty_year.future_value.toLocaleString()} in 20.`}`,
+    cta:          { label: `Move to ${destination}`, action: 'deploy_lump_sum' },
+  };
+
+  return {
+    user_id: user_id ?? null,
+    amount,
+    credit_date: creditDate,
+    source_merchant: source_merchant || null,
+    recommendation: {
+      destination,
+      applied_amount: parseFloat(applied_amount.toFixed(2)),
+      leftover_for_next_priority: leftover,
+      reason,
+    },
+    projection_7pct: growth,
+    notification,
+    checks: {
+      high_interest_debt_above_8pct: highApr.length > 0,
+      emergency_fund_below_3mo:      emergencyGap > 0,
+      emergency_fund_target_3mo:     parseFloat(emergencyTarget.toFixed(2)),
+    },
+    disclaimer: 'Past performance does not guarantee future results. Projections assume a constant 7% annual return, compounded monthly; actual returns will vary.',
+  };
+}
+
+function recordSaving({ user_id, merchant, finding_type, savings_type, amount, confirmed_date, note }) {
+  if (!['one_time', 'recurring_monthly'].includes(savings_type)) {
+    throw new Error(`savings_type must be 'one_time' or 'recurring_monthly'`);
+  }
+  const info = db.prepare(`
+    INSERT INTO savings_ledger (user_id, merchant, finding_type, savings_type, amount, confirmed_date, note)
+    VALUES (@user_id, @merchant, @finding_type, @savings_type, @amount, @confirmed_date, @note)
+  `).run({
+    user_id,
+    merchant,
+    finding_type,
+    savings_type,
+    amount,
+    confirmed_date,
+    note: note || null,
+  });
+  return { id: info.lastInsertRowid, user_id, merchant, finding_type, savings_type, amount, confirmed_date };
+}
+
+function getSavingsSummary({ user_id }) {
+  const rows = db.prepare(`
+    SELECT id, merchant, finding_type, savings_type, amount, confirmed_date
+    FROM savings_ledger
+    WHERE user_id = ?
+  `).all(user_id);
+
+  let total_one_time = 0;
+  let total_monthly_recurring = 0;
+  for (const r of rows) {
+    if (r.savings_type === 'one_time') total_one_time += r.amount;
+    else if (r.savings_type === 'recurring_monthly') total_monthly_recurring += r.amount;
+  }
+  const projected_annual_recurring = total_monthly_recurring * 12;
+
+  const ranked = rows.map(r => ({
+    ...r,
+    impact: r.savings_type === 'recurring_monthly' ? r.amount * 12 : r.amount,
+  })).sort((a, b) => b.impact - a.impact).slice(0, 5);
+
+  return {
+    total_one_time_savings:      parseFloat(total_one_time.toFixed(2)),
+    total_monthly_recurring:     parseFloat(total_monthly_recurring.toFixed(2)),
+    projected_annual_recurring:  parseFloat(projected_annual_recurring.toFixed(2)),
+    top_five_by_impact: ranked.map(r => ({
+      id:             r.id,
+      merchant:       r.merchant,
+      finding_type:   r.finding_type,
+      savings_type:   r.savings_type,
+      amount:         r.amount,
+      confirmed_date: r.confirmed_date,
+      annualized_impact: parseFloat(r.impact.toFixed(2)),
+    })),
+  };
+}
+
 // ── MCP server ────────────────────────────────────────────────────────────────
 
 const server = new Server(
@@ -383,7 +965,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
     {
       name: 'sync_transactions',
-      description: 'Fetch and store transactions from Chase, Wells Fargo, and Discover via Plaid. Defaults to last 90 days.',
+      description: 'Fetch and store transactions from Chase and Wells Fargo via Plaid. Defaults to last 90 days.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -469,6 +1051,100 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
     {
+      name: 'recommend_lump_sum_deployment',
+      description: 'For a one-time refund/credit, recommend where to deploy it: (1) high-interest debt >8% APR, (2) emergency fund if <3 months spending, (3) otherwise the priority investment account. Returns 10- and 20-year growth at 7% and a same-day notification payload.',
+      inputSchema: {
+        type: 'object',
+        required: ['amount'],
+        properties: {
+          amount:                       { type: 'number', description: 'Lump sum amount in dollars' },
+          user_id:                      { type: 'number', description: 'Optional user_id for context' },
+          debts:                        { type: 'array',  items: { type: 'object', properties: { name: { type: 'string' }, balance: { type: 'number' }, apr: { type: 'number' } } } },
+          emergency_fund_balance:       { type: 'number', description: 'Current emergency fund balance' },
+          monthly_spending:             { type: 'number', description: 'Override monthly spending (default: avg last 3 months)' },
+          priority_investment_account:  { type: 'string', description: 'Where to deploy if no debt/emergency need (default: Roth IRA)' },
+          recommended_fund_ticker:      { type: 'string', description: 'Optional fund ticker to suggest (e.g. VTI)' },
+          source_merchant:              { type: 'string', description: 'Merchant that issued the credit, for notification copy' },
+          credit_date:                  { type: 'string', description: 'Date the credit posted (YYYY-MM-DD); defaults to today' },
+        },
+      },
+    },
+    {
+      name: 'recommend_fund',
+      description: 'Recommend a specific fund/product given account type, time horizon, and risk tolerance. >10y → total market index (VTI/VTSAX/FSKAX, ER <0.05%); 5–10y → balanced or target-date fund; <5y → FDIC-insured HYSA only. Includes expense ratio vs. active-fund average and a disclaimer.',
+      inputSchema: {
+        type: 'object',
+        required: ['account_type', 'time_horizon_years'],
+        properties: {
+          account_type:       { type: 'string', description: 'Roth IRA, 401k, taxable brokerage, HYSA, etc.' },
+          time_horizon_years: { type: 'number', description: 'Years until the money is needed' },
+          risk_tolerance:     { type: 'string', enum: ['conservative', 'moderate', 'aggressive'], description: 'Default: moderate' },
+          brokerage:          { type: 'string', description: 'Preferred brokerage: vanguard, fidelity, schwab, ishares (default vanguard)' },
+          retirement_year:    { type: 'number', description: 'For target-date funds — the year of planned retirement' },
+        },
+      },
+    },
+    {
+      name: 'route_savings_to_account',
+      description: 'Recommend where a recovered monthly saving should go, in priority order: high-interest debt → unused 401(k) match → emergency fund (HYSA) → Roth IRA → 401(k) → taxable brokerage. Returns an ordered allocation with plain-English reasoning.',
+      inputSchema: {
+        type: 'object',
+        required: ['monthly_amount'],
+        properties: {
+          monthly_amount:           { type: 'number', description: 'Recovered monthly saving to route (dollars)' },
+          user_id:                  { type: 'number', description: 'Optional user_id for context' },
+          debts:                    { type: 'array',  items: { type: 'object', properties: { name: { type: 'string' }, balance: { type: 'number' }, apr: { type: 'number' } } }, description: 'User\'s debts (any APR; only those >8% are prioritized)' },
+          employer_match:           { type: 'object', description: '{unused_monthly_match} or {percent, salary, current_contribution_pct}' },
+          emergency_fund_balance:   { type: 'number', description: 'Current balance in emergency fund / HYSA' },
+          monthly_spending:         { type: 'number', description: 'Override monthly spending estimate (default: avg last 3 months)' },
+          roth_ira_ytd_contributed: { type: 'number', description: 'Roth IRA contributed year-to-date' },
+          roth_ira_eligible:        { type: 'boolean', description: 'Whether the user is under the Roth income phaseout (default true)' },
+          k401_ytd_contributed:     { type: 'number', description: '401(k) contributed year-to-date' },
+          k401_annual_limit:        { type: 'number', description: 'Override 401(k) annual limit (default 24000 for 2026)' },
+          roth_ira_annual_limit:    { type: 'number', description: 'Override Roth IRA annual limit (default 7000 for 2026)' },
+        },
+      },
+    },
+    {
+      name: 'calculate_goal_gap',
+      description: 'For each of the user\'s goals, compute required monthly contribution (7% long-term / 4.5% short-term HYSA), compare to current monthly investment contribution, and flag goals whose gap can be partially or fully closed by recurring savings from the ledger.',
+      inputSchema: {
+        type: 'object',
+        required: ['user_id'],
+        properties: {
+          user_id: { type: 'number', description: 'ID of the user (from the web app users table)' },
+        },
+      },
+    },
+    {
+      name: 'record_saving',
+      description: 'Record a confirmed saving (refund or negotiated monthly reduction) in the savings ledger.',
+      inputSchema: {
+        type: 'object',
+        required: ['user_id', 'merchant', 'finding_type', 'savings_type', 'amount', 'confirmed_date'],
+        properties: {
+          user_id:        { type: 'number', description: 'ID of the user this saving belongs to' },
+          merchant:       { type: 'string', description: 'Merchant or company name the saving came from' },
+          finding_type:   { type: 'string', description: 'Origin of the saving (e.g. recurring, duplicate_subscription, price_change, dispute)' },
+          savings_type:   { type: 'string', enum: ['one_time', 'recurring_monthly'], description: 'One-time refund vs. recurring monthly reduction' },
+          amount:         { type: 'number', description: 'Dollar amount (one-time total, or monthly reduction)' },
+          confirmed_date: { type: 'string', description: 'Date the saving was confirmed (YYYY-MM-DD)' },
+          note:           { type: 'string', description: 'Optional note or context' },
+        },
+      },
+    },
+    {
+      name: 'get_savings_summary',
+      description: 'Summarize savings for a user: total one-time, total monthly recurring, projected annual recurring, and top 5 by impact.',
+      inputSchema: {
+        type: 'object',
+        required: ['user_id'],
+        properties: {
+          user_id: { type: 'number', description: 'ID of the user' },
+        },
+      },
+    },
+    {
       name: 'get_saved_actions',
       description: 'List all drafts saved in the actions/ folder with their type, merchant, status, and a short preview.',
       inputSchema: { type: 'object', properties: {} },
@@ -506,6 +1182,24 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         break;
       case 'draft_phone_script':
         result = await draftPhoneScript(args);
+        break;
+      case 'recommend_lump_sum_deployment':
+        result = recommendLumpSumDeployment(args);
+        break;
+      case 'recommend_fund':
+        result = recommendFund(args);
+        break;
+      case 'route_savings_to_account':
+        result = routeSavingsToAccount(args);
+        break;
+      case 'calculate_goal_gap':
+        result = calculateGoalGap(args);
+        break;
+      case 'record_saving':
+        result = recordSaving(args);
+        break;
+      case 'get_savings_summary':
+        result = getSavingsSummary(args);
         break;
       case 'get_saved_actions':
         result = getSavedActions();

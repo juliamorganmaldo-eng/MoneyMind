@@ -48,6 +48,73 @@ db.exec(`
     created_at    TEXT DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS budgets (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id    INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    category   TEXT NOT NULL,
+    monthly_limit REAL NOT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(user_id, category)
+  );
+
+  CREATE TABLE IF NOT EXISTS goals (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id          INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    goal_type        TEXT NOT NULL CHECK (goal_type IN ('retirement','house_deposit','emergency_fund','education','other')),
+    name             TEXT,
+    target_amount    REAL NOT NULL,
+    current_progress REAL NOT NULL DEFAULT 0,
+    target_date      TEXT NOT NULL,
+    created_at       TEXT DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_goals_user ON goals(user_id);
+
+  CREATE TABLE IF NOT EXISTS savings_ledger (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id         INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    action_id       INTEGER REFERENCES action_drafts(id) ON DELETE SET NULL,
+    merchant        TEXT NOT NULL,
+    finding_type    TEXT NOT NULL,
+    savings_type    TEXT NOT NULL CHECK (savings_type IN ('one_time', 'recurring_monthly')),
+    amount          REAL NOT NULL,
+    outcome_note    TEXT,
+    confirmed_date  TEXT NOT NULL,
+    created_at      TEXT DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_savings_user ON savings_ledger(user_id);
+
+  CREATE TABLE IF NOT EXISTS net_worth_snapshots (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id           INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    month             TEXT NOT NULL,
+    total_assets      REAL NOT NULL,
+    total_liabilities REAL NOT NULL,
+    net_worth         REAL NOT NULL,
+    created_at        TEXT DEFAULT (datetime('now')),
+    UNIQUE(user_id, month)
+  );
+
+  CREATE TABLE IF NOT EXISTS monthly_reports (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    month       TEXT NOT NULL,
+    data_json   TEXT NOT NULL,
+    created_at  TEXT DEFAULT (datetime('now')),
+    UNIQUE(user_id, month)
+  );
+
+  CREATE TABLE IF NOT EXISTS notifications (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    type        TEXT NOT NULL,
+    title       TEXT NOT NULL,
+    body        TEXT,
+    data_json   TEXT,
+    read_at     TEXT,
+    created_at  TEXT DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, read_at);
+
   CREATE TABLE IF NOT EXISTS session (
     sid    TEXT PRIMARY KEY,
     sess   TEXT NOT NULL,

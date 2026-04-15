@@ -11,6 +11,15 @@ const accountsRouter = require('./routes/accounts');
 const dashboardRouter = require('./routes/dashboard');
 const findingsRouter = require('./routes/findings');
 const actionsRouter = require('./routes/actions');
+const budgetRouter = require('./routes/budget');
+const budgetSettingsRouter = require('./routes/budget-settings');
+const networthRouter = require('./routes/networth');
+const subscriptionsRouter = require('./routes/subscriptions');
+const spendingRouter = require('./routes/spending');
+const transactionsRouter = require('./routes/transactions');
+const goalsRouter = require('./routes/goals');
+const notificationsRouter = require('./routes/notifications');
+const { scheduleMonthlyReports } = require('./lib/monthly-report');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -62,6 +71,14 @@ app.use('/accounts', accountsRouter);
 app.use('/dashboard', dashboardRouter);
 app.use('/findings', findingsRouter);
 app.use('/actions', actionsRouter);
+app.use('/budget', budgetRouter);
+app.use('/budget-settings', budgetSettingsRouter);
+app.use('/networth', networthRouter);
+app.use('/subscriptions', subscriptionsRouter);
+app.use('/spending', spendingRouter);
+app.use('/transactions', transactionsRouter);
+app.use('/goals', goalsRouter);
+app.use('/notifications', notificationsRouter);
 
 // Root redirect
 app.get('/', (req, res) => {
@@ -123,6 +140,7 @@ app.use((err, req, res, next) => {
 
 app.listen(PORT, () => {
   console.log(`MoneyMind web server running on http://localhost:${PORT}`);
+  scheduleMonthlyReports();
 });
 
 module.exports = app;

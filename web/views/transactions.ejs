@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<%- include('partials/head', { title: 'Transactions' }) %>
+<body class="app-page">
+  <div class="app-layout">
+    <%- include('partials/sidebar', { page: 'transactions' }) %>
+
+    <main class="main-content">
+      <div class="page-inner">
+
+        <div class="page-header">
+          <div class="page-header-text">
+            <h1 class="page-title">Transactions</h1>
+            <p class="page-subtitle"><%= selectedMonthLabel %> &mdash; <%= txnCount %> transaction<%= txnCount !== 1 ? 's' : '' %></p>
+          </div>
+        </div>
+
+        <!-- Controls: Month Selector + Search -->
+        <div class="txn-controls">
+          <form method="GET" action="/transactions" class="txn-controls-form">
+            <select name="month" class="form-input txn-month-select" onchange="this.form.submit()">
+              <% monthOptions.forEach(function(opt) { %>
+                <option value="<%= opt.value %>" <%= opt.value === selectedMonth ? 'selected' : '' %>><%= opt.label %></option>
+              <% }); %>
+            </select>
+            <div class="txn-search-wrap">
+              <svg class="txn-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"/>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+              <input type="text" name="search" class="form-input txn-search-input" placeholder="Search merchant..." value="<%= search %>">
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm">Search</button>
+            <% if (search) { %>
+              <a href="/transactions?month=<%= selectedMonth %>" class="btn btn-secondary btn-sm">Clear</a>
+            <% } %>
+          </form>
+        </div>
+
+        <!-- Summary Bar -->
+        <div class="txn-summary">
+          <div class="txn-summary-item">
+            <span class="txn-summary-label">Total Spent</span>
+            <span class="txn-summary-value">$<%= totalSpent.toLocaleString('en-US', { minimumFractionDigits: 2 }) %></span>
+          </div>
+          <div class="txn-summary-divider"></div>
+          <div class="txn-summary-item">
+            <span class="txn-summary-label">Income</span>
+            <span class="txn-summary-value txn-income">$<%= totalIncome.toLocaleString('en-US', { minimumFractionDigits: 2 }) %></span>
+          </div>
+          <div class="txn-summary-divider"></div>
+          <div class="txn-summary-item">
+            <span class="txn-summary-label">Transactions</span>
+            <span class="txn-summary-value"><%= txnCount %></span>
+          </div>
+        </div>
+
+        <!-- Transactions Table -->
+        <% if (transactions.length === 0) { %>
+          <div class="panel">
+            <div class="panel-empty">
+              <% if (search) { %>
+                No transactions matching "<%= search %>" in <%= selectedMonthLabel %>.
+              <% } else { %>
+                No transactions found for <%= selectedMonthLabel %>.
+              <% } %>
+            </div>
+          </div>
+        <% } else { %>
+          <div class="panel">
+            <div class="txn-table-wrap">
+              <table class="txn-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Merchant</th>
+                    <th>Category</th>
+                    <th>Account</th>
+                    <th class="text-right">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% transactions.forEach(function(txn) { %>
+                    <tr>
+                      <td class="txn-date-cell">
+                        <%= new Date(txn.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) %>
+                      </td>
+                      <td class="txn-merchant-cell"><%= txn.merchant %></td>
+                      <td>
+                        <span class="txn-category-badge"><%= txn.displayCategory %></span>
+                      </td>
+                      <td>
+                        <span class="txn-account-badge txn-account-<%= txn.account %>"><%= txn.account === 'chase' ? 'Chase' : 'Wells Fargo' %></span>
+                      </td>
+                      <td class="text-right">
+                        <span class="<%= txn.amount < 0 ? 'txn-amount-credit' : 'txn-amount-debit' %>">
+                          <%= txn.amount < 0 ? '-' : '' %>$<%= Math.abs(txn.amount).toFixed(2) %>
+                        </span>
+                      </td>
+                    </tr>
+                  <% }); %>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        <% } %>
+
+      </div>
+    </main>
+  </div>
+</body>
+</html>

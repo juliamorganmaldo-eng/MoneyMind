@@ -17,73 +17,340 @@
           <% } %>
         <% } %>
 
+        <!-- Low Balance Alerts -->
+        <% if (lowBalanceAlerts && lowBalanceAlerts.length > 0) { %>
+          <% lowBalanceAlerts.forEach(function(alert) { %>
+            <div class="low-balance-alert">
+              <div class="low-balance-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                  <line x1="12" y1="9" x2="12" y2="13"/>
+                  <line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+              </div>
+              <div class="low-balance-text">
+                <strong>Low Balance Warning:</strong>
+                <%= alert.institution %> <%= alert.name %><%= alert.mask ? ' (...' + alert.mask + ')' : '' %> has only <strong>$<%= alert.balance.toFixed(2) %></strong> available.
+              </div>
+            </div>
+          <% }); %>
+        <% } %>
+
         <div class="page-header">
           <div class="page-header-text">
             <h1 class="page-title">Dashboard</h1>
-            <p class="page-subtitle">Welcome back, <%= user.name || user.email %></p>
+            <p class="page-subtitle">Welcome back, <%= user.name || user.email %> &mdash; <%= monthName %></p>
           </div>
         </div>
 
-        <div class="stats-grid">
+        <!-- ── Summary Row ─────────────────────────────────────────────── -->
+        <div class="stats-grid" style="grid-template-columns: repeat(5, 1fr);">
           <div class="stat-card">
-            <div class="stat-number"><%= stats.accounts %></div>
-            <div class="stat-label">Connected Accounts</div>
+            <div class="stat-number" style="font-size: 1.75rem;">$<%= totalSpending.toLocaleString('en-US', { minimumFractionDigits: 2 }) %></div>
+            <div class="stat-label">Spent This Month</div>
+          </div>
+          <div class="stat-card" style="border-left-color: var(--green-500);">
+            <div class="stat-number" style="font-size: 1.75rem; color: var(--green-700);">$<%= totalIncome.toLocaleString('en-US', { minimumFractionDigits: 2 }) %></div>
+            <div class="stat-label">Income This Month</div>
+          </div>
+          <div class="stat-card" style="border-left-color: var(--purple);">
+            <div class="stat-number" style="font-size: 1.75rem; color: var(--purple);">$<%= investments.total.toLocaleString('en-US', { minimumFractionDigits: 2 }) %></div>
+            <div class="stat-label">Invested This Month</div>
+          </div>
+          <div class="stat-card" style="border-left-color: <%= netWorth >= 0 ? 'var(--green-500)' : 'var(--red)' %>;">
+            <div class="stat-number" style="font-size: 1.75rem; color: <%= netWorth >= 0 ? 'var(--green-700)' : 'var(--red)' %>;">$<%= netWorth.toLocaleString('en-US', { minimumFractionDigits: 2 }) %></div>
+            <div class="stat-label">Net Worth</div>
           </div>
           <div class="stat-card">
-            <div class="stat-number"><%= stats.findings %></div>
+            <div class="stat-number" style="font-size: 1.75rem;"><%= findingsCount %></div>
             <div class="stat-label">Findings</div>
           </div>
-          <div class="stat-card">
-            <div class="stat-number"><%= stats.actions %></div>
-            <div class="stat-label">Action Drafts</div>
+        </div>
+
+        <!-- ══════════════════════════════════════════════════════════════ -->
+        <!-- ── SECTION: Spending Overview ─────────────────────────────── -->
+        <!-- ══════════════════════════════════════════════════════════════ -->
+        <div class="dash-section">
+          <div class="dash-section-header">
+            <h2 class="dash-section-title">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+              Spending Overview
+            </h2>
+            <a href="/spending" class="panel-link">View breakdown</a>
+          </div>
+
+          <div class="two-col">
+            <!-- Spending Chart -->
+            <div class="panel">
+              <div class="panel-header">
+                <h2 class="panel-title">Top Categories</h2>
+              </div>
+              <div style="padding: 1.25rem;">
+                <% if (spendingChart && spendingChart.length > 0) { %>
+                  <canvas id="dashPieChart" height="220"></canvas>
+                <% } else { %>
+                  <div class="panel-empty">No spending data yet. Sync your transactions to see a breakdown.</div>
+                <% } %>
+              </div>
+              <% if (spendingChart && spendingChart.length > 0) { %>
+                <div class="dash-top-cats">
+                  <% spendingChart.slice(0, 5).forEach(function(c) { %>
+                    <div class="dash-cat-row">
+                      <span class="spending-dot" style="background: <%= c.color %>;"></span>
+                      <span class="dash-cat-name"><%= c.category %></span>
+                      <span class="dash-cat-amt">$<%= c.amount.toFixed(2) %></span>
+                    </div>
+                  <% }); %>
+                </div>
+              <% } %>
+            </div>
+
+            <!-- Recent Transactions -->
+            <div class="panel">
+              <div class="panel-header">
+                <h2 class="panel-title">Recent Transactions</h2>
+                <a href="/transactions" class="panel-link">View all</a>
+              </div>
+              <% if (recentTxns.length === 0) { %>
+                <div class="panel-empty">No transactions yet. Sync your accounts to see activity.</div>
+              <% } else { %>
+                <div class="dash-txn-list">
+                  <% recentTxns.forEach(function(txn) { %>
+                    <div class="dash-txn-row">
+                      <div class="dash-txn-left">
+                        <span class="dash-txn-merchant"><%= txn.merchant %></span>
+                        <span class="dash-txn-meta">
+                          <%= new Date(txn.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) %>
+                          &middot;
+                          <%= txn.account === 'chase' ? 'Chase' : 'Wells Fargo' %>
+                        </span>
+                      </div>
+                      <span class="<%= txn.amount < 0 ? 'dash-txn-credit' : 'dash-txn-debit' %>">
+                        <%= txn.amount < 0 ? '-' : '' %>$<%= Math.abs(txn.amount).toFixed(2) %>
+                      </span>
+                    </div>
+                  <% }); %>
+                </div>
+              <% } %>
+            </div>
+          </div>
+
+          <!-- Recent Findings + Actions -->
+          <div class="two-col" style="margin-top: 1.25rem;">
+            <div class="panel">
+              <div class="panel-header">
+                <h2 class="panel-title">Recent Findings</h2>
+                <a href="/findings" class="panel-link">View all</a>
+              </div>
+              <% if (recentFindings.length === 0) { %>
+                <div class="panel-empty">No findings yet. Run an analysis to discover insights.</div>
+              <% } else { %>
+                <div class="panel-list">
+                  <% recentFindings.forEach(function(f) { %>
+                    <div class="panel-item">
+                      <span class="badge badge-<%= f.type === 'recurring' ? 'recurring' : f.type === 'duplicate_subscription' ? 'duplicate' : f.type === 'price_change' ? 'price' : 'other' %>"><%= f.type.replace(/_/g, ' ') %></span>
+                      <span class="panel-item-title"><%= f.title %></span>
+                      <span class="panel-item-date"><%= new Date(f.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) %></span>
+                    </div>
+                  <% }); %>
+                </div>
+              <% } %>
+            </div>
+
+            <div class="panel">
+              <div class="panel-header">
+                <h2 class="panel-title">Recent Actions</h2>
+                <a href="/actions" class="panel-link">View all</a>
+              </div>
+              <% if (recentActions.length === 0) { %>
+                <div class="panel-empty">No action drafts yet.</div>
+              <% } else { %>
+                <div class="panel-list">
+                  <% recentActions.forEach(function(a) { %>
+                    <div class="panel-item">
+                      <span class="badge badge-<%= a.type === 'email' ? 'email' : a.type === 'dispute_letter' ? 'dispute' : 'script' %>"><%= a.type.replace(/_/g, ' ') %></span>
+                      <span class="panel-item-title"><%= a.merchant %></span>
+                      <span class="badge badge-status-<%= a.status %>"><%= a.status %></span>
+                      <span class="panel-item-date"><%= new Date(a.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) %></span>
+                    </div>
+                  <% }); %>
+                </div>
+              <% } %>
+            </div>
           </div>
         </div>
 
-        <div class="two-col">
-          <div class="panel">
-            <div class="panel-header">
-              <h2 class="panel-title">Recent Findings</h2>
-              <a href="/findings" class="panel-link">View all</a>
-            </div>
-            <% if (recentFindings.length === 0) { %>
-              <div class="panel-empty">No findings yet. Connect accounts and run an analysis to discover insights.</div>
-            <% } else { %>
-              <div class="panel-list">
-                <% recentFindings.forEach(function(f) { %>
-                  <div class="panel-item">
-                    <span class="badge badge-<%= f.type === 'recurring' ? 'recurring' : f.type === 'duplicate_subscription' ? 'duplicate' : f.type === 'price_change' ? 'price' : 'other' %>"><%= f.type.replace(/_/g, ' ') %></span>
-                    <span class="panel-item-title"><%= f.title %></span>
-                    <span class="panel-item-date"><%= new Date(f.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) %></span>
-                  </div>
-                <% }); %>
-              </div>
-            <% } %>
+        <!-- ══════════════════════════════════════════════════════════════ -->
+        <!-- ── SECTION: Investment & Net Worth ────────────────────────── -->
+        <!-- ══════════════════════════════════════════════════════════════ -->
+        <div class="dash-section">
+          <div class="dash-section-header">
+            <h2 class="dash-section-title">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+              Investment &amp; Net Worth
+            </h2>
+            <a href="/networth" class="panel-link">Full details</a>
           </div>
 
-          <div class="panel">
-            <div class="panel-header">
-              <h2 class="panel-title">Recent Actions</h2>
-              <a href="/actions" class="panel-link">View all</a>
+          <!-- Net Worth Bar -->
+          <div class="dash-nw-bar">
+            <div class="dash-nw-bar-item">
+              <span class="dash-nw-bar-label">Total Assets</span>
+              <span class="dash-nw-bar-value nw-positive">$<%= totalAssets.toLocaleString('en-US', { minimumFractionDigits: 2 }) %></span>
             </div>
-            <% if (recentActions.length === 0) { %>
-              <div class="panel-empty">No action drafts yet. Use the MCP tools to draft emails, dispute letters, or call scripts.</div>
-            <% } else { %>
-              <div class="panel-list">
-                <% recentActions.forEach(function(a) { %>
-                  <div class="panel-item">
-                    <span class="badge badge-<%= a.type === 'email' ? 'email' : a.type === 'dispute_letter' ? 'dispute' : 'script' %>"><%= a.type.replace(/_/g, ' ') %></span>
-                    <span class="panel-item-title"><%= a.merchant %></span>
-                    <span class="badge badge-status-<%= a.status %>"><%= a.status %></span>
-                    <span class="panel-item-date"><%= new Date(a.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) %></span>
+            <div class="dash-nw-bar-sep"></div>
+            <div class="dash-nw-bar-item">
+              <span class="dash-nw-bar-label">Total Liabilities</span>
+              <span class="dash-nw-bar-value nw-negative">$<%= totalLiabilities.toLocaleString('en-US', { minimumFractionDigits: 2 }) %></span>
+            </div>
+            <div class="dash-nw-bar-sep"></div>
+            <div class="dash-nw-bar-item">
+              <span class="dash-nw-bar-label">Net Worth</span>
+              <span class="dash-nw-bar-value <%= netWorth >= 0 ? 'nw-positive' : 'nw-negative' %>" style="font-size: 1.375rem;">$<%= netWorth.toLocaleString('en-US', { minimumFractionDigits: 2 }) %></span>
+            </div>
+          </div>
+
+          <!-- Investments This Month -->
+          <% if (investments.transactions.length > 0) { %>
+            <div class="panel" style="margin-bottom: 1.25rem;">
+              <div class="panel-header">
+                <h2 class="panel-title" style="color: var(--purple);">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline; vertical-align: -2px; margin-right: 0.375rem;"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+                  Investments This Month
+                </h2>
+              </div>
+              <div class="dash-invest-summary">
+                <% Object.keys(investments.byPlatform).sort().forEach(function(platform) { %>
+                  <div class="dash-invest-platform">
+                    <span class="dash-invest-name"><%= platform %></span>
+                    <span class="dash-invest-amt">$<%= investments.byPlatform[platform].toLocaleString('en-US', { minimumFractionDigits: 2 }) %></span>
                   </div>
                 <% }); %>
               </div>
-            <% } %>
+              <div class="dash-invest-txns">
+                <% investments.transactions.forEach(function(t) { %>
+                  <div class="dash-invest-row">
+                    <div class="dash-invest-left">
+                      <span class="dash-invest-merchant"><%= t.merchant %></span>
+                      <span class="dash-invest-date"><%= new Date(t.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) %></span>
+                    </div>
+                    <span class="dash-invest-amount">$<%= t.amount.toFixed(2) %></span>
+                  </div>
+                <% }); %>
+              </div>
+            </div>
+          <% } %>
+
+          <!-- Assets vs Liabilities -->
+          <div class="two-col">
+            <div class="panel">
+              <div class="panel-header">
+                <h2 class="panel-title" style="color: var(--green-700);">Assets</h2>
+              </div>
+              <% if (assets.length === 0) { %>
+                <div class="panel-empty">No asset accounts found.</div>
+              <% } else { %>
+                <div class="dash-account-list">
+                  <% assets.forEach(function(a) { %>
+                    <div class="dash-account-row">
+                      <div class="dash-account-icon dash-icon-asset">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <% if (a.subtype === 'checking') { %>
+                            <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/>
+                          <% } else if (a.subtype === 'savings') { %>
+                            <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                          <% } else { %>
+                            <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>
+                          <% } %>
+                        </svg>
+                      </div>
+                      <div class="dash-account-info">
+                        <span class="dash-account-name"><%= a.name %></span>
+                        <span class="dash-account-inst"><%= a.institution %><%= a.mask ? ' (...' + a.mask + ')' : '' %></span>
+                      </div>
+                      <div class="dash-account-bal">
+                        <span class="dash-bal-current">$<%= a.balance.toLocaleString('en-US', { minimumFractionDigits: 2 }) %></span>
+                        <% if (a.available != null && a.available !== a.balance) { %>
+                          <span class="dash-bal-avail">$<%= a.available.toLocaleString('en-US', { minimumFractionDigits: 2 }) %> avail</span>
+                        <% } %>
+                      </div>
+                    </div>
+                  <% }); %>
+                </div>
+              <% } %>
+            </div>
+
+            <div class="panel">
+              <div class="panel-header">
+                <h2 class="panel-title" style="color: var(--red);">Liabilities</h2>
+              </div>
+              <% if (liabilities.length === 0) { %>
+                <div class="panel-empty">No liabilities found.</div>
+              <% } else { %>
+                <div class="dash-account-list">
+                  <% liabilities.forEach(function(l) { %>
+                    <div class="dash-account-row">
+                      <div class="dash-account-icon dash-icon-liability">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/>
+                        </svg>
+                      </div>
+                      <div class="dash-account-info">
+                        <span class="dash-account-name"><%= l.name %></span>
+                        <span class="dash-account-inst"><%= l.institution %><%= l.mask ? ' (...' + l.mask + ')' : '' %></span>
+                      </div>
+                      <div class="dash-account-bal">
+                        <span class="dash-bal-current" style="color: var(--red);">$<%= l.balance.toLocaleString('en-US', { minimumFractionDigits: 2 }) %></span>
+                        <% if (l.available != null) { %>
+                          <span class="dash-bal-avail">$<%= l.available.toLocaleString('en-US', { minimumFractionDigits: 2 }) %> avail</span>
+                        <% } %>
+                      </div>
+                    </div>
+                  <% }); %>
+                </div>
+              <% } %>
+            </div>
           </div>
         </div>
 
       </div>
     </main>
   </div>
+
+  <% if (spendingChart && spendingChart.length > 0) { %>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+    <script>
+      var spendingData = <%- JSON.stringify(spendingChart) %>;
+      new Chart(document.getElementById('dashPieChart'), {
+        type: 'doughnut',
+        data: {
+          labels: spendingData.map(function(d) { return d.category; }),
+          datasets: [{
+            data: spendingData.map(function(d) { return d.amount; }),
+            backgroundColor: spendingData.map(function(d) { return d.color; }),
+            borderWidth: 2,
+            borderColor: '#fff',
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '60%',
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: function(ctx) {
+                  var total = ctx.dataset.data.reduce(function(a, b) { return a + b; }, 0);
+                  var pct = ((ctx.parsed / total) * 100).toFixed(1);
+                  return ctx.label + ': $' + ctx.parsed.toFixed(2) + ' (' + pct + '%)';
+                }
+              }
+            }
+          }
+        }
+      });
+    </script>
+  <% } %>
 </body>
 </html>

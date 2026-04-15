@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<%- include('partials/head', { title: 'Goals' }) %>
+<body class="app-page">
+  <div class="app-layout">
+    <%- include('partials/sidebar', { page: 'goals' }) %>
+
+    <main class="main-content">
+      <div class="page-inner">
+
+        <div class="page-header">
+          <div class="page-header-text">
+            <h1 class="page-title">Goals</h1>
+            <p class="page-subtitle">Define up to <%= maxGoals %> financial goals. MoneyMind will calculate what it takes to hit each one.</p>
+          </div>
+          <% if (goals.length < maxGoals) { %>
+            <button class="btn btn-primary" onclick="document.getElementById('newGoalCard').style.display='block'">+ Add Goal</button>
+          <% } %>
+        </div>
+
+        <div class="stats-row" style="display:flex; gap:16px; margin-bottom:20px;">
+          <div class="stat-card" style="flex:1; background:#F0F7F2; padding:14px 18px; border-radius:10px;">
+            <div class="stat-label" style="font-size:12px; color:#6B7280;">Current monthly contribution</div>
+            <div class="stat-value" style="font-size:22px; font-weight:700; color:#2D6A4F;">$<%= currentMonthly.toLocaleString() %></div>
+            <div style="font-size:11px; color:#6B7280;">Avg of last 3 months (Vanguard + Robinhood)</div>
+          </div>
+          <div class="stat-card" style="flex:1; background:#ECFDF5; padding:14px 18px; border-radius:10px;">
+            <div class="stat-label" style="font-size:12px; color:#6B7280;">Savings available to redirect</div>
+            <div class="stat-value" style="font-size:22px; font-weight:700; color:#065F46;">$<%= monthlySavingsPool.toLocaleString() %>/mo</div>
+            <div style="font-size:11px; color:#6B7280;">From resolved actions in savings ledger</div>
+          </div>
+        </div>
+
+        <div id="newGoalCard" class="goal-card" style="display:<%= goals.length === 0 ? 'block' : 'none' %>; padding:20px; border:1px solid #E5E7EB; border-radius:12px; margin-bottom:20px; background:#fff;">
+          <h3 style="margin:0 0 12px;">New goal</h3>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+            <div>
+              <label class="form-label">Type</label>
+              <select id="goalType" class="form-input">
+                <option value="retirement">Retirement</option>
+                <option value="house_deposit">House deposit</option>
+                <option value="emergency_fund">Emergency fund</option>
+                <option value="education">Education</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div>
+              <label class="form-label">Name (optional)</label>
+              <input type="text" id="goalName" class="form-input" placeholder="e.g. Down payment for Brooklyn condo">
+            </div>
+            <div>
+              <label class="form-label">Target amount ($)</label>
+              <input type="number" id="goalTarget" class="form-input" step="0.01" placeholder="100000">
+            </div>
+            <div>
+              <label class="form-label">Current progress ($)</label>
+              <input type="number" id="goalProgress" class="form-input" step="0.01" placeholder="0">
+            </div>
+            <div>
+              <label class="form-label">Target date</label>
+              <input type="date" id="goalDate" class="form-input">
+            </div>
+          </div>
+          <div style="display:flex; gap:8px; margin-top:16px;">
+            <button class="btn btn-primary" onclick="saveGoal()">Save goal</button>
+            <button class="btn btn-secondary" onclick="document.getElementById('newGoalCard').style.display='none'">Cancel</button>
+          </div>
+        </div>
+
+        <div id="goalsList">
+          <% goals.forEach(function(g) { %>
+            <% var m = g.metrics; %>
+            <div class="goal-card" style="padding:20px; border:1px solid #E5E7EB; border-radius:12px; margin-bottom:16px; background:#fff;">
+              <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                <div>
+                  <div style="font-size:12px; color:#6B7280; text-transform:uppercase; letter-spacing:0.05em;"><%= g.goal_type.replace(/_/g,' ') %></div>
+                  <h3 style="margin:4px 0 0; font-size:18px;"><%= g.name || g.goal_type.replace(/_/g,' ') %></h3>
+                  <div style="color:#6B7280; font-size:13px; margin-top:2px;">Target: $<%= Number(g.target_amount).toLocaleString() %> by <%= g.target_date %> · <%= m.months_remaining %> months</div>
+                </div>
+                <button class="btn btn-secondary btn-sm" onclick="deleteGoal(<%= g.id %>)">Remove</button>
+              </div>
+
+              <div style="margin:14px 0;">
+                <div style="display:flex; justify-content:space-between; font-size:12px; color:#6B7280;">
+                  <span>$<%= Number(g.current_progress).toLocaleString() %> saved</span>
+                  <span><%= m.progress_pct %>%</span>
+                </div>
+                <div style="height:8px; background:#E5E7EB; border-radius:4px; overflow:hidden; margin-top:4px;">
+                  <div style="height:100%; width:<%= m.progress_pct %>%; background:#2D6A4F;"></div>
+                </div>
+              </div>
+
+              <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin-top:14px;">
+                <div style="background:#F9FAFB; padding:10px; border-radius:8px;">
+                  <div style="font-size:11px; color:#6B7280;">Required / month</div>
+                  <div style="font-size:16px; font-weight:700;">$<%= m.required_monthly.toLocaleString() %></div>
+                </div>
+                <div style="background:#F9FAFB; padding:10px; border-radius:8px;">
+                  <div style="font-size:11px; color:#6B7280;">You contribute</div>
+                  <div style="font-size:16px; font-weight:700;">$<%= m.current_monthly.toLocaleString() %></div>
+                </div>
+                <div style="background:<%= m.gap > 0 ? '#FEF3C7' : '#D1FAE5' %>; padding:10px; border-radius:8px;">
+                  <div style="font-size:11px; color:#6B7280;">Gap</div>
+                  <div style="font-size:16px; font-weight:700; color:<%= m.gap > 0 ? '#92400E' : '#065F46' %>;">$<%= m.gap.toLocaleString() %></div>
+                </div>
+                <div style="background:#ECFDF5; padding:10px; border-radius:8px;">
+                  <div style="font-size:11px; color:#6B7280;">Ledger can cover</div>
+                  <div style="font-size:16px; font-weight:700; color:#065F46;">$<%= m.savings_can_cover.toLocaleString() %></div>
+                </div>
+              </div>
+
+              <% if (m.gap === 0) { %>
+                <div style="margin-top:12px; padding:10px 12px; background:#D1FAE5; border-radius:8px; color:#065F46; font-size:13px;">✓ On track — your current contribution covers this goal.</div>
+              <% } else if (m.remaining_gap === 0) { %>
+                <div style="margin-top:12px; padding:10px 12px; background:#ECFDF5; border-radius:8px; color:#065F46; font-size:13px;">✓ Redirecting $<%= m.savings_can_cover.toLocaleString() %>/mo from your savings ledger fully closes the gap.</div>
+              <% } else if (m.savings_can_cover > 0) { %>
+                <div style="margin-top:12px; padding:10px 12px; background:#FEF3C7; border-radius:8px; color:#92400E; font-size:13px;">Ledger savings cover $<%= m.savings_can_cover.toLocaleString() %>/mo of the gap. $<%= m.remaining_gap.toLocaleString() %>/mo still needs a source.</div>
+              <% } else { %>
+                <div style="margin-top:12px; padding:10px 12px; background:#FEF3C7; border-radius:8px; color:#92400E; font-size:13px;">No ledger savings available yet. Find $<%= m.gap.toLocaleString() %>/mo to hit this target.</div>
+              <% } %>
+            </div>
+          <% }); %>
+        </div>
+
+        <% if (goals.length === 0) { %>
+          <div class="empty-state" style="text-align:center; padding:40px; color:#6B7280;">
+            <p>No goals yet. Add your first one above.</p>
+          </div>
+        <% } %>
+
+      </div>
+    </main>
+  </div>
+
+  <script>
+    async function saveGoal() {
+      var body = {
+        goal_type:        document.getElementById('goalType').value,
+        name:             document.getElementById('goalName').value,
+        target_amount:    document.getElementById('goalTarget').value,
+        current_progress: document.getElementById('goalProgress').value || 0,
+        target_date:      document.getElementById('goalDate').value,
+      };
+      if (!body.target_amount || !body.target_date) { alert('Target amount and date are required.'); return; }
+
+      var res = await fetch('/goals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      var data = await res.json();
+      if (!res.ok) { alert(data.error || 'Failed to save'); return; }
+      window.location.reload();
+    }
+
+    async function deleteGoal(id) {
+      if (!confirm('Remove this goal?')) return;
+      await fetch('/goals/' + id, { method: 'DELETE' });
+      window.location.reload();
+    }
+  </script>
+</body>
+</html>

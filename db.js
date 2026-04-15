@@ -28,6 +28,21 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_findings_type ON findings(type);
+
+  CREATE TABLE IF NOT EXISTS savings_ledger (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id        INTEGER NOT NULL,
+    merchant       TEXT NOT NULL,
+    finding_type   TEXT NOT NULL,
+    savings_type   TEXT NOT NULL CHECK (savings_type IN ('one_time', 'recurring_monthly')),
+    amount         REAL NOT NULL,
+    confirmed_date TEXT NOT NULL,
+    note           TEXT,
+    created_at     TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_savings_user ON savings_ledger(user_id);
+  CREATE INDEX IF NOT EXISTS idx_savings_type ON savings_ledger(savings_type);
 `);
 
 module.exports = db;
