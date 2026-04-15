@@ -87,9 +87,14 @@
       <!-- Register Form -->
       <div class="form-section">
         <h2 class="form-title">Create an account</h2>
-        <p class="form-subtitle">Join MoneyMind today — it's free</p>
+        <% if (locals.inviteToken) { %>
+          <p class="form-subtitle">You've been invited. Complete the form below to activate your account.</p>
+        <% } else { %>
+          <p class="form-subtitle" style="color:#92400E; background:#FEF3C7; padding:10px 12px; border-radius:8px;">MoneyMind is invite-only. Paste the invite link you were sent into your browser — it includes the token needed to register.</p>
+        <% } %>
 
         <form action="/auth/register" method="POST" class="auth-form">
+          <input type="hidden" name="invite_token" value="<%= locals.inviteToken || '' %>">
           <div class="form-group">
             <label for="reg-name" class="form-label">Full name <span class="form-label-optional">(optional)</span></label>
             <input

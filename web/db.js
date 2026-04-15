@@ -115,6 +115,18 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, read_at);
 
+  CREATE TABLE IF NOT EXISTS invites (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    token        TEXT UNIQUE NOT NULL,
+    email        TEXT,
+    created_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    used_by      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    used_at      TEXT,
+    expires_at   TEXT,
+    created_at   TEXT DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_invites_token ON invites(token);
+
   CREATE TABLE IF NOT EXISTS session (
     sid    TEXT PRIMARY KEY,
     sess   TEXT NOT NULL,
@@ -122,6 +134,9 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_session_expire ON session(expire);
 `);
+
+// Add is_admin column if missing (idempotent ALTER)
+try { db.exec('ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0'); } catch (_) {}
 
 // pg-compatible query wrapper: accepts (sql, params) and returns { rows, rowCount }
 const pool = {

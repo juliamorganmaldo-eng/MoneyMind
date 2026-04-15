@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<%- include('partials/head', { title: 'Admin — Invites' }) %>
+<body class="app-page">
+  <div class="app-layout">
+    <%- include('partials/sidebar', { page: 'admin' }) %>
+    <main class="main-content">
+      <div class="page-inner">
+
+        <div class="page-header">
+          <div class="page-header-text">
+            <h1 class="page-title">Invites</h1>
+            <p class="page-subtitle">Registration is invite-only. Create a link and send it to the new user.</p>
+          </div>
+        </div>
+
+        <div class="card" style="padding:20px; background:#fff; border:1px solid #E5E7EB; border-radius:12px; margin-bottom:20px;">
+          <h3 style="margin:0 0 12px;">Create invite</h3>
+          <div style="display:grid; grid-template-columns:2fr 1fr auto; gap:10px; align-items:end;">
+            <div>
+              <label class="form-label">Email (optional — restrict to this address)</label>
+              <input type="email" id="invEmail" class="form-input" placeholder="new.user@example.com">
+            </div>
+            <div>
+              <label class="form-label">Expires in (hours)</label>
+              <input type="number" id="invTtl" class="form-input" value="168">
+            </div>
+            <button class="btn btn-primary" onclick="createInvite()">Create link</button>
+          </div>
+          <div id="newInvite" style="display:none; margin-top:16px; padding:12px; background:#ECFDF5; border-radius:8px; font-size:13px;"></div>
+        </div>
+
+        <div style="background:#fff; border:1px solid #E5E7EB; border-radius:12px; overflow:hidden;">
+          <table style="width:100%; border-collapse:collapse;">
+            <thead style="background:#F9FAFB;">
+              <tr>
+                <th style="text-align:left; padding:10px 14px; font-size:12px; color:#6B7280;">Token (first 10)</th>
+                <th style="text-align:left; padding:10px 14px; font-size:12px; color:#6B7280;">Email</th>
+                <th style="text-align:left; padding:10px 14px; font-size:12px; color:#6B7280;">Status</th>
+                <th style="text-align:left; padding:10px 14px; font-size:12px; color:#6B7280;">Expires</th>
+                <th style="text-align:left; padding:10px 14px; font-size:12px; color:#6B7280;">Created</th>
+                <th style="padding:10px 14px;"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <% invites.forEach(function(i) { %>
+                <tr style="border-top:1px solid #E5E7EB;">
+                  <td style="padding:10px 14px; font-family:monospace; font-size:12px;"><%= i.token.slice(0,10) %>…</td>
+                  <td style="padding:10px 14px;"><%= i.email || '—' %></td>
+                  <td style="padding:10px 14px;">
+                    <span style="font-size:11px; padding:2px 8px; border-radius:999px; background:<%= i.status==='active'?'#D1FAE5':i.status==='used'?'#E5E7EB':'#FEE2E2' %>; color:<%= i.status==='active'?'#065F46':i.status==='used'?'#374151':'#991B1B' %>;"><%= i.status %></span>
+                  </td>
+                  <td style="padding:10px 14px; font-size:12px; color:#6B7280;"><%= i.expires_at || '—' %></td>
+                  <td style="padding:10px 14px; font-size:12px; color:#6B7280;"><%= i.created_at %></td>
+                  <td style="padding:10px 14px; text-align:right;">
+                    <% if (i.status === 'active') { %>
+                      <button class="btn btn-secondary btn-sm" onclick="copyLink('<%= i.url %>')">Copy link</button>
+                      <button class="btn btn-secondary btn-sm" onclick="revoke(<%= i.id %>)">Revoke</button>
+                    <% } %>
+                  </td>
+                </tr>
+              <% }); %>
+              <% if (invites.length === 0) { %>
+                <tr><td colspan="6" style="padding:20px; text-align:center; color:#6B7280;">No invites yet.</td></tr>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script>
+    async function createInvite() {
+      var res = await fetch('/admin/invites', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: document.getElementById('invEmail').value, ttl_hours: document.getElementById('invTtl').value })
+      });
+      var data = await res.json();
+      if (!res.ok) { alert(data.error || 'Failed'); return; }
+      var box = document.getElementById('newInvite');
+      box.style.display = 'block';
+      box.innerHTML = '<strong>Invite link created.</strong> Send this to the new user — it expires at ' + data.expires_at + '.<br><code style="display:block; margin-top:6px; padding:8px; background:#fff; border-radius:6px; word-break:break-all;">' + data.url + '</code>';
+      setTimeout(() => window.location.reload(), 1500);
+    }
+    async function revoke(id) {
+      if (!confirm('Revoke this invite?')) return;
+      await fetch('/admin/invites/' + id + '/revoke', { method: 'POST' });
+      window.location.reload();
+    }
+    function copyLink(url) {
+      navigator.clipboard.writeText(url);
+      alert('Copied.');
+    }
+  </script>
+</body>
+</html>

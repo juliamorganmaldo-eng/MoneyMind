@@ -19,7 +19,9 @@ const spendingRouter = require('./routes/spending');
 const transactionsRouter = require('./routes/transactions');
 const goalsRouter = require('./routes/goals');
 const notificationsRouter = require('./routes/notifications');
+const adminRouter = require('./routes/admin');
 const { scheduleMonthlyReports } = require('./lib/monthly-report');
+const { bootstrap } = require('./lib/bootstrap');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -79,6 +81,7 @@ app.use('/spending', spendingRouter);
 app.use('/transactions', transactionsRouter);
 app.use('/goals', goalsRouter);
 app.use('/notifications', notificationsRouter);
+app.use('/admin', adminRouter);
 
 // Root redirect
 app.get('/', (req, res) => {
@@ -138,8 +141,13 @@ app.use((err, req, res, next) => {
   `);
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`MoneyMind web server running on http://localhost:${PORT}`);
+  try {
+    await bootstrap();
+  } catch (err) {
+    console.error('[bootstrap] failed:', err);
+  }
   scheduleMonthlyReports();
 });
 
