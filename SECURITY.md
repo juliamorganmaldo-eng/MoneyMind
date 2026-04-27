@@ -177,12 +177,22 @@ the bottom for what is still out of scope.
     is **counts only** (`{ added_count, modified_count, removed_count }`)
     — no transaction payload. The browser fetches data through the
     next endpoint.
-  - `GET /api/transactions?limit=&offset=` — returns a curated
-    column subset (`id, plaid_account_id, name, merchant_name,
-    amount, iso_currency_code, date, pending, category`) for the
-    session user only. `location`, `category_id`, `plaid_item_id`,
+  - `GET /api/transactions?month=&search=&account_id=&page=&per_page=`
+    — returns a curated column subset (`id, plaid_account_id, name,
+    merchant_name, amount, iso_currency_code, date, pending, category`)
+    for the session user only. `location`, `category_id`, `plaid_item_id`,
     and `plaid_transaction_id` are deliberately not shipped to the
-    browser.
+    browser. Every filter value is bound through a parameterized query
+    placeholder; `search` is run through ILIKE with `%` and `_` escaped
+    to literal so the user can't smuggle SQL wildcards. Crucially, the
+    `user_id = $1` filter is always the *first* predicate, before any
+    client-supplied value — so even if a user crafts an `account_id`
+    that belongs to another user, the query returns zero rows because
+    the (user_id, plaid_account_id) pair doesn't exist for them.
+  - `GET /api/accounts` — returns the session user's accounts joined
+    with `plaid_items.institution_name`. Used by the dashboard
+    (Net Position + grouped cards) and the transactions filter
+    dropdown. Both halves of the join enforce `user_id` equality.
 
 ## Invite-only registration
 

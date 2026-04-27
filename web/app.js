@@ -12,6 +12,7 @@ const authRoutes = require('./routes/auth');
 const dashboardRoutes = require('./routes/dashboard');
 const plaidRoutes = require('./routes/plaid');
 const transactionRoutes = require('./routes/transactions');
+const accountRoutes = require('./routes/accounts');
 
 const PORT = Number(process.env.PORT) || 3001;
 const IS_PROD = process.env.NODE_ENV === 'production';
@@ -73,6 +74,7 @@ app.use(authRoutes);
 app.use(dashboardRoutes);
 app.use(plaidRoutes);
 app.use(transactionRoutes);
+app.use(accountRoutes);
 
 app.use((req, res) => {
   res.status(404).send('Not found');

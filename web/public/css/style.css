@@ -286,5 +286,225 @@ form input:focus {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.txn-amount.txn-out { color: var(--ink); }
+.txn-amount.txn-out { color: var(--danger); }
 .txn-amount.txn-in  { color: var(--green-800); }
+
+/* ── header actions (Dashboard ↔ Transactions nav) ────────────────────── */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+
+/* ── Net Position panel ───────────────────────────────────────────────── */
+.net-panel {
+  text-align: center;
+  padding: 1.75rem 2rem;
+}
+.net-label {
+  font-size: .75rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: .375rem;
+}
+.net-amount {
+  font-size: 2.25rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.net-amount.net-positive { color: var(--green-800); }
+.net-amount.net-negative { color: var(--danger); }
+
+/* ── sync controls + last-synced ──────────────────────────────────────── */
+.sync-controls {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+}
+.last-synced {
+  font-size: .8125rem;
+  color: var(--muted);
+}
+
+/* ── grouped institution accounts ─────────────────────────────────────── */
+.institution-group + .institution-group { margin-top: 1.25rem; }
+.institution-name {
+  font-weight: 700;
+  color: var(--green-900);
+  font-size: 1rem;
+  margin-bottom: .5rem;
+}
+.account-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: .75rem;
+}
+.account-card {
+  padding: .875rem 1rem;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: .25rem;
+}
+.acct-row1 {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: .5rem;
+}
+.acct-row2 {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: .5rem;
+}
+.acct-name {
+  font-weight: 600;
+  color: var(--ink);
+  font-size: .9375rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.acct-mask {
+  font-size: .75rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .04em;
+}
+.acct-type {
+  font-size: .75rem;
+  color: var(--muted);
+}
+.acct-balance {
+  font-weight: 700;
+  color: var(--green-900);
+  font-variant-numeric: tabular-nums;
+}
+.acct-available {
+  font-size: .75rem;
+  color: var(--muted);
+  text-align: right;
+}
+
+/* ── transactions page ────────────────────────────────────────────────── */
+.page-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--green-900);
+  margin-bottom: 1rem;
+}
+.filters {
+  display: grid;
+  grid-template-columns: 200px 1fr 1fr;
+  gap: 1rem;
+}
+.filter { display: flex; flex-direction: column; gap: .375rem; }
+.filter-grow { min-width: 0; }
+.filter label {
+  font-size: .75rem;
+  font-weight: 600;
+  color: var(--ink-2);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.filter select,
+.filter input[type="search"] {
+  padding: .625rem .75rem;
+  font-size: .9375rem;
+  font-family: inherit;
+  color: var(--ink);
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.filter select:focus,
+.filter input[type="search"]:focus {
+  outline: none;
+  border-color: var(--green-700);
+  box-shadow: 0 0 0 3px rgba(22, 101, 52, .15);
+}
+
+/* transaction row layout for the /transactions page */
+.txn-row {
+  grid-template-columns: 100px 1fr 200px 110px;
+}
+.txn-primary { display: block; }
+.txn-secondary {
+  display: block;
+  font-size: .8125rem;
+  color: var(--muted);
+  margin-top: .125rem;
+}
+.txn-account {
+  font-size: .8125rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.txn-amount.txn-in { color: var(--green-800); }
+.txn-amount.txn-out { color: var(--danger); }
+.txn-pending {
+  display: inline-block;
+  margin-left: .375rem;
+  padding: .0625rem .375rem;
+  font-size: .6875rem;
+  font-weight: 600;
+  font-style: italic;
+  color: var(--muted);
+  background: var(--green-50);
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  vertical-align: 1px;
+}
+
+.txn-info {
+  font-size: .8125rem;
+  color: var(--muted);
+  margin-bottom: .75rem;
+}
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+.pagination button {
+  padding: .5rem .875rem;
+  font-size: .875rem;
+  font-weight: 500;
+  font-family: inherit;
+  color: var(--green-900);
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.pagination button:hover:not(:disabled) {
+  background: var(--green-50);
+  border-color: var(--green-700);
+}
+.pagination button:disabled { opacity: .4; cursor: not-allowed; }
+.page-indicator {
+  font-size: .8125rem;
+  color: var(--muted);
+}
+
+/* ── spinner (text-based to avoid an asset) ──────────────────────────── */
+.spinner-inline {
+  display: inline-block;
+  width: 1em;
+  text-align: center;
+  animation: pulse 1.2s ease-in-out infinite;
+  color: var(--green-700);
+  font-weight: 700;
+  letter-spacing: .15em;
+}
+@keyframes pulse { 0%,100% { opacity: .3 } 50% { opacity: 1 } }

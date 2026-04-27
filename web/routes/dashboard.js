@@ -49,4 +49,56 @@ router.get('/dashboard', requireAuth, async (req, res, next) => {
   }
 });
 
+// Build a list of {value, label} option pairs for the Month dropdown.
+// Goes back at most 12 months from today, but stops at the user's earliest
+// transaction's month so we don't show empty months.
+function buildMonthOptions(earliestDate) {
+  const list = [];
+  const now = new Date();
+  let earliestMonthIndex = null; // year * 12 + month, comparable
+  if (earliestDate) {
+    const d = new Date(earliestDate);
+    earliestMonthIndex = d.getUTCFullYear() * 12 + d.getUTCMonth();
+  }
+  for (let i = 0; i < 12; i++) {
+    const dt = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+    const idx = dt.getUTCFullYear() * 12 + dt.getUTCMonth();
+    if (earliestMonthIndex !== null && idx < earliestMonthIndex) break;
+    const yyyy = dt.getUTCFullYear();
+    const mm = String(dt.getUTCMonth() + 1).padStart(2, '0');
+    const label = dt.toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+    list.push({ value: `${yyyy}-${mm}`, label });
+  }
+  return list;
+}
+
+router.get('/transactions', requireAuth, async (req, res, next) => {
+  try {
+    const userId = req.session.userId;
+
+    // Accounts dropdown — user-scoped, with institution name for grouping in UI.
+    const { rows: accounts } = await pool.query(
+      `SELECT a.plaid_account_id, a.name, a.mask, a.subtype, pi.institution_name
+         FROM accounts a
+         JOIN plaid_items pi
+           ON pi.id = a.plaid_item_id AND pi.user_id = a.user_id
+        WHERE a.user_id = $1
+        ORDER BY pi.id, a.id`,
+      [userId]
+    );
+
+    // Earliest transaction date — caps the Month dropdown range.
+    const { rows: minRow } = await pool.query(
+      `SELECT MIN(date) AS earliest FROM transactions WHERE user_id = $1`,
+      [userId]
+    );
+    const months = buildMonthOptions(minRow[0].earliest);
+    const currentMonth = months.length ? months[0].value : null;
+
+    res.render('transactions', { accounts, months, currentMonth });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

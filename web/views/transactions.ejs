@@ -1,0 +1,77 @@
+<%- include('partials/head', { title: 'Transactions' }) %>
+<body class="app-body">
+  <header class="app-header">
+    <div class="brand">
+      <span class="brand-mark">◆</span>
+      <span class="brand-name">MoneyMind</span>
+    </div>
+    <div class="header-actions">
+      <a href="/dashboard" class="btn-ghost btn-inline">← Dashboard</a>
+      <form method="POST" action="/logout" class="logout-form">
+        <button type="submit" class="btn-ghost">Log out</button>
+      </form>
+    </div>
+  </header>
+
+  <main class="app-main">
+    <h1 class="page-title">Transactions</h1>
+
+    <section class="panel">
+      <div class="filters">
+        <div class="filter">
+          <label for="month-filter">Month</label>
+          <select id="month-filter">
+            <% if (months.length === 0) { %>
+              <option value=""><%= new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' }) %></option>
+            <% } %>
+            <% months.forEach(function(m) { %>
+              <option value="<%= m.value %>" <%= m.value === currentMonth ? 'selected' : '' %>>
+                <%= m.label %>
+              </option>
+            <% }); %>
+          </select>
+        </div>
+
+        <div class="filter">
+          <label for="account-filter">Account</label>
+          <select id="account-filter">
+            <option value="">All accounts</option>
+            <% accounts.forEach(function(a) { %>
+              <option value="<%= a.plaid_account_id %>">
+                <%= a.institution_name %> · <%= a.name %><%= a.mask ? ' ····' + a.mask : '' %>
+              </option>
+            <% }); %>
+          </select>
+        </div>
+
+        <div class="filter filter-grow">
+          <label for="search-input">Search</label>
+          <input id="search-input" type="search" placeholder="Name or merchant…" autocomplete="off" />
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div id="txn-info" class="txn-info">&nbsp;</div>
+      <div id="txn-error" class="alert alert-error" hidden></div>
+      <div id="txn-table">
+        <div class="empty"><span class="spinner-inline">…</span> Loading…</div>
+      </div>
+
+      <div class="pagination">
+        <button id="prev-page" type="button" disabled>← Previous</button>
+        <span id="page-indicator" class="page-indicator"></span>
+        <button id="next-page" type="button" disabled>Next →</button>
+      </div>
+    </section>
+  </main>
+
+  <%# accountIndex lets the JS resolve plaid_account_id → display name without re-querying %>
+  <script>
+    window.__moneymind_accounts = <%- JSON.stringify(accounts.map(function(a) {
+      return { id: a.plaid_account_id, name: a.name, mask: a.mask, institution: a.institution_name };
+    })) %>;
+  </script>
+  <script src="/js/transactions.js"></script>
+</body>
+</html>
