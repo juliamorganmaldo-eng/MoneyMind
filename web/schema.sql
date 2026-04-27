@@ -85,3 +85,34 @@ CREATE TABLE IF NOT EXISTS accounts (
 );
 CREATE INDEX IF NOT EXISTS idx_accounts_user_id ON accounts(user_id);
 CREATE INDEX IF NOT EXISTS idx_accounts_plaid_item_id ON accounts(plaid_item_id);
+
+-- Transactions. The composite FK (user_id, plaid_account_id) into accounts
+-- guarantees at the schema level that a transaction can never be attached
+-- to an account belonging to a different user — even if application code
+-- has a bug.
+CREATE TABLE IF NOT EXISTS transactions (
+  id                   SERIAL PRIMARY KEY,
+  user_id              INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  plaid_item_id        INTEGER NOT NULL REFERENCES plaid_items(id) ON DELETE CASCADE,
+  plaid_account_id     TEXT NOT NULL,
+  plaid_transaction_id TEXT NOT NULL,
+  name                 TEXT,
+  merchant_name        TEXT,
+  amount               NUMERIC(14,2),
+  iso_currency_code    TEXT,
+  date                 DATE,
+  authorized_date      DATE,
+  category             TEXT[],
+  category_id          TEXT,
+  payment_channel      TEXT,
+  pending              BOOLEAN,
+  location             JSONB,
+  created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT transactions_user_txn_unique UNIQUE (user_id, plaid_transaction_id),
+  CONSTRAINT transactions_account_fk
+    FOREIGN KEY (user_id, plaid_account_id)
+    REFERENCES accounts(user_id, plaid_account_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_transactions_user_date ON transactions(user_id, date DESC);
+CREATE INDEX IF NOT EXISTS idx_transactions_plaid_item_id ON transactions(plaid_item_id);

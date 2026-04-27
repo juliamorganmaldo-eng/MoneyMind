@@ -242,3 +242,49 @@ form input:focus {
   font-size: .8125rem;
   color: var(--muted);
 }
+
+.txn-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+.txn {
+  display: grid;
+  grid-template-columns: 100px 1fr auto;
+  gap: 1rem;
+  align-items: center;
+  padding: .75rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: .9375rem;
+}
+.txn:last-child { border-bottom: 0; }
+.txn-date {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-size: .8125rem;
+}
+.txn-name {
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.txn-pending {
+  display: inline-block;
+  margin-left: .375rem;
+  padding: .0625rem .375rem;
+  font-size: .6875rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--green-50);
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  vertical-align: 1px;
+}
+.txn-amount {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.txn-amount.txn-out { color: var(--ink); }
+.txn-amount.txn-in  { color: var(--green-800); }

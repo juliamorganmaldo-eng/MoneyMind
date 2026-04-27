@@ -46,6 +46,19 @@
         </ul>
       <% } %>
     </section>
+
+    <% if (items && items.length > 0) { %>
+      <section class="panel">
+        <div class="panel-header">
+          <h2 class="panel-title">Recent Transactions</h2>
+          <button id="sync-btn" class="btn-ghost btn-inline" type="button">
+            ↻ Sync transactions
+          </button>
+        </div>
+        <div id="sync-status" class="alert" role="status" hidden></div>
+        <div id="txn-list" class="empty">Loading…</div>
+      </section>
+    <% } %>
   </main>
 
   <script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
@@ -115,6 +128,88 @@
       }
 
       btn.addEventListener('click', startLink);
+
+      // ── Recent Transactions + Sync ─────────────────────────────────────
+      var syncBtn = document.getElementById('sync-btn');
+      var syncStatus = document.getElementById('sync-status');
+      var txnList = document.getElementById('txn-list');
+
+      function escapeHtml(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+          return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+      }
+      function fmtMoney(amt, ccy) {
+        // Plaid convention: positive amount = money OUT of the account.
+        // We display outflows as negative (red) and inflows as positive (green).
+        var n = Number(amt);
+        if (!isFinite(n)) return '';
+        var symbol = ccy === 'USD' ? '$' : (ccy ? ccy + ' ' : '');
+        var sign = n > 0 ? '−' : (n < 0 ? '+' : '');
+        return sign + symbol + Math.abs(n).toFixed(2);
+      }
+      function txnSign(amt) { return Number(amt) > 0 ? 'out' : 'in'; }
+
+      async function loadRecent() {
+        if (!txnList) return;
+        try {
+          var r = await fetch('/api/transactions?limit=10', { credentials: 'same-origin' });
+          if (!r.ok) throw new Error('status ' + r.status);
+          var json = await r.json();
+          var rows = json.transactions || [];
+          if (rows.length === 0) {
+            txnList.className = 'empty';
+            txnList.innerHTML = 'No transactions yet. Click <strong>Sync transactions</strong> to fetch them.';
+            return;
+          }
+          txnList.className = '';
+          txnList.innerHTML = '<ul class="txn-list">' + rows.map(function (t) {
+            return '<li class="txn">'
+              + '<span class="txn-date">' + escapeHtml(t.date || '') + '</span>'
+              + '<span class="txn-name">' + escapeHtml(t.merchant_name || t.name || 'Unknown')
+                + (t.pending ? ' <span class="txn-pending">pending</span>' : '')
+                + '</span>'
+              + '<span class="txn-amount txn-' + txnSign(t.amount) + '">'
+                + escapeHtml(fmtMoney(t.amount, t.iso_currency_code))
+                + '</span>'
+              + '</li>';
+          }).join('') + '</ul>';
+        } catch (e) {
+          txnList.className = 'empty';
+          txnList.innerHTML = 'Could not load transactions.';
+        }
+      }
+
+      if (syncBtn) {
+        syncBtn.addEventListener('click', async function () {
+          syncBtn.disabled = true;
+          syncStatus.hidden = false;
+          syncStatus.className = 'alert alert-info';
+          syncStatus.textContent = 'Syncing…';
+          try {
+            var r = await fetch('/api/transactions/sync', {
+              method: 'POST', credentials: 'same-origin',
+            });
+            if (!r.ok) {
+              var j = await r.json().catch(function () { return {}; });
+              throw new Error(j.error || ('status ' + r.status));
+            }
+            var c = await r.json();
+            var parts = ['Added ' + c.added_count + ' new transaction' + (c.added_count === 1 ? '' : 's')];
+            if (c.modified_count) parts.push('updated ' + c.modified_count);
+            if (c.removed_count)  parts.push('removed ' + c.removed_count);
+            syncStatus.textContent = parts.join(', ') + '.';
+            await loadRecent();
+          } catch (e) {
+            syncStatus.className = 'alert alert-error';
+            syncStatus.textContent = 'Sync failed: ' + e.message;
+          } finally {
+            syncBtn.disabled = false;
+          }
+        });
+      }
+
+      if (txnList) loadRecent();
     })();
   </script>
 </body>

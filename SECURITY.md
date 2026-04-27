@@ -4,8 +4,8 @@ This document covers the security posture of the web app scaffolded in
 `web/`. It does **not** cover the MCP server in the parent directory.
 
 Last updated: 2026-04-27. Scope: authentication + Plaid Link integration
-(sandbox). Transaction sync is **not** yet implemented — see "Not yet
-implemented" at the bottom for everything still out of scope.
+(sandbox) + cursor-based transaction sync. See "Not yet implemented" at
+the bottom for what is still out of scope.
 
 ---
 
@@ -145,6 +145,45 @@ implemented" at the bottom for everything still out of scope.
   defense-in-depth — a typo or schema drift elsewhere shouldn't be able
   to leak another user's accounts.
 
+## Transactions — sync, scope, schema isolation
+
+- **Sync algorithm:** cursor-based `/transactions/sync`. Each
+  `plaid_items` row carries a `cursor`; the syncer pages through Plaid
+  (`while has_more`) and persists the new `next_cursor` only after all
+  added/modified/removed rows for that page have been written, in a
+  single DB transaction. This makes a partial failure recoverable —
+  the next sync replays the same delta.
+- **Decrypted-token lifetime:** the access token is decrypted right
+  before the Plaid call loop, held in a single local `accessToken`
+  variable, and explicitly nulled before any DB work runs. It is never
+  written to a log, never returned to the browser, never persisted in
+  any form except the encrypted column.
+- **Schema-level multi-tenant guarantee:** the `transactions` table has
+  a **composite foreign key** `(user_id, plaid_account_id) →
+  accounts(user_id, plaid_account_id)`. Because `accounts` enforces
+  `UNIQUE (user_id, plaid_account_id)`, this means a transaction row can
+  *only* be linked to an account belonging to the same user — even if
+  application code tries to set the wrong `user_id`, Postgres rejects
+  the insert with an FK violation. This is the strongest isolation
+  primitive in the schema.
+- **Per-user uniqueness:** `UNIQUE (user_id, plaid_transaction_id)`
+  makes the sync idempotent (re-running yields zero new inserts) and
+  scopes the constraint per-user, so two users could in principle hold
+  the same Plaid `transaction_id` without colliding (this happens in
+  sandbox where transaction IDs are deterministic).
+- **Endpoints (both auth-required, both user-scoped):**
+  - `POST /api/transactions/sync` — runs sync for `req.session.userId`
+    only (the SELECT for items is `WHERE user_id = $1`). The response
+    is **counts only** (`{ added_count, modified_count, removed_count }`)
+    — no transaction payload. The browser fetches data through the
+    next endpoint.
+  - `GET /api/transactions?limit=&offset=` — returns a curated
+    column subset (`id, plaid_account_id, name, merchant_name,
+    amount, iso_currency_code, date, pending, category`) for the
+    session user only. `location`, `category_id`, `plaid_item_id`,
+    and `plaid_transaction_id` are deliberately not shipped to the
+    browser.
+
 ## Invite-only registration
 
 - Registration requires a valid, **unused** invite code. 10 codes are
@@ -172,9 +211,8 @@ implemented" at the bottom for everything still out of scope.
 This scaffold is auth-only. The following are **not** wired up and must be
 added in later steps before the app is useful or production-ready:
 
-1. **Transaction sync.** Plaid Link → exchange → store accounts is wired
-   (sandbox), but `/transactions/sync` (Step 2) is not. The `cursor`
-   column on `plaid_items` is reserved for it.
+1. **Webhooks.** Plaid `TRANSACTIONS_SYNC_UPDATES_AVAILABLE` and other
+   webhooks are not handled — sync today is user-triggered (button) only.
 2. **CSRF tokens.** `sameSite=lax` blocks the common cross-site vectors
    for the current routes (including the `/api/plaid/*` POSTs, since they
    require an authenticated session and `lax` blocks cookies on
