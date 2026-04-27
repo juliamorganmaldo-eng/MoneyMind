@@ -1,73 +1,65 @@
-const bcrypt = require('bcrypt');
-const crypto = require('crypto');
+const crypto = require('node:crypto');
+const fs = require('node:fs/promises');
+const path = require('node:path');
 const { pool } = require('../db');
 
-async function bootstrap() {
-  // 1. Count users; if none, seed the admin.
-  const countRes = await pool.query('SELECT COUNT(*) AS c FROM users');
-  const userCount = Number(countRes.rows[0].c);
+// Unambiguous alphabet (no 0/O/1/I/L) — length 32, evenly divides 256 so
+// `byte % 32` is uniform (no modulo bias).
+const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+const INVITE_COUNT = 10;
 
-  if (userCount === 0) {
-    const email = (process.env.ADMIN_EMAIL || 'admin@moneymind.local').trim().toLowerCase();
-    const password = process.env.ADMIN_PASSWORD || crypto.randomBytes(12).toString('base64url');
-    const generated = !process.env.ADMIN_PASSWORD;
-
-    const hash = await bcrypt.hash(password, 12);
-    const ins = await pool.query(
-      'INSERT INTO users (email, password_hash, name, is_admin) VALUES ($1, $2, $3, $4) RETURNING id',
-      [email, hash, 'Admin', 1]
-    );
-    console.log('============================================================');
-    console.log('[bootstrap] First run — seeded admin user.');
-    console.log(`[bootstrap]   email:    ${email}`);
-    if (generated) {
-      console.log(`[bootstrap]   password: ${password}   (generated — save it now, it will not be shown again)`);
-    } else {
-      console.log('[bootstrap]   password: (from ADMIN_PASSWORD env)');
-    }
-    console.log(`[bootstrap]   user_id:  ${ins.rows[0].id}`);
-    console.log('[bootstrap] Sign in, then visit /admin to mint invite links.');
-    console.log('============================================================');
-  } else {
-    // Guarantee at least one admin exists; promote user id 1 if none flagged.
-    const adminRes = await pool.query('SELECT COUNT(*) AS c FROM users WHERE is_admin = 1');
-    if (Number(adminRes.rows[0].c) === 0) {
-      await pool.query('UPDATE users SET is_admin = 1 WHERE id = (SELECT MIN(id) FROM users)');
-      console.log('[bootstrap] No admin found — promoted lowest-id user to admin.');
-    }
+function generateInviteCode() {
+  const bytes = crypto.randomBytes(12);
+  let out = '';
+  for (let i = 0; i < 12; i++) {
+    out += ALPHABET[bytes[i] % ALPHABET.length];
+    if (i === 3 || i === 7) out += '-';
   }
+  return out;
 }
 
-function generateInviteToken() {
-  return crypto.randomBytes(24).toString('base64url');
+async function applySchema() {
+  const schemaPath = path.join(__dirname, '..', 'schema.sql');
+  const sql = await fs.readFile(schemaPath, 'utf8');
+  await pool.query(sql);
 }
 
-async function createInvite({ createdBy, email = null, ttlHours = 168 }) {
-  const token = generateInviteToken();
-  const expires = new Date(Date.now() + ttlHours * 3600 * 1000).toISOString();
-  await pool.query(
-    'INSERT INTO invites (token, email, created_by, expires_at) VALUES ($1, $2, $3, $4)',
-    [token, email, createdBy, expires]
-  );
-  return { token, expires_at: expires };
+async function seedInviteCodesIfEmpty() {
+  const { rows } = await pool.query('SELECT COUNT(*)::int AS n FROM invite_codes');
+  if (rows[0].n > 0) return null;
+
+  const codes = Array.from({ length: INVITE_COUNT }, generateInviteCode);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    for (const code of codes) {
+      await client.query('INSERT INTO invite_codes (code) VALUES ($1)', [code]);
+    }
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+  return codes;
 }
 
-async function consumeInvite(token, newUserId) {
-  if (!token) return { ok: false, reason: 'missing_token' };
-  const rows = (await pool.query(
-    'SELECT id, email, used_at, expires_at FROM invites WHERE token = $1',
-    [token]
-  )).rows;
-  if (rows.length === 0) return { ok: false, reason: 'invalid' };
-  const inv = rows[0];
-  if (inv.used_at) return { ok: false, reason: 'already_used' };
-  if (inv.expires_at && new Date(inv.expires_at) < new Date()) return { ok: false, reason: 'expired' };
-
-  await pool.query(
-    'UPDATE invites SET used_at = datetime(\'now\'), used_by = $1 WHERE id = $2',
-    [newUserId, inv.id]
-  );
-  return { ok: true, invite: inv };
+function printInviteCodes(codes) {
+  const bar = '─'.repeat(56);
+  console.log('\n' + bar);
+  console.log('  MoneyMind — invite codes generated (save these now):');
+  console.log(bar);
+  for (const c of codes) console.log('    ' + c);
+  console.log(bar);
+  console.log('  These are the ONLY copy. They are not printed again.');
+  console.log(bar + '\n');
 }
 
-module.exports = { bootstrap, createInvite, consumeInvite, generateInviteToken };
+async function bootstrap() {
+  await applySchema();
+  const codes = await seedInviteCodesIfEmpty();
+  if (codes) printInviteCodes(codes);
+}
+
+module.exports = { bootstrap, generateInviteCode };

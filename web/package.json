@@ -1,18 +1,23 @@
 {
   "name": "moneymind-web",
-  "version": "1.0.0",
-  "description": "MoneyMind web application",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MoneyMind web app — invite-only auth scaffold",
   "main": "app.js",
   "scripts": {
     "start": "node app.js",
-    "dev": "nodemon app.js"
+    "dev": "node --watch app.js"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",
-    "dotenv": "^16.0.0",
-    "ejs": "^3.1.9",
-    "express": "^4.18.2",
-    "express-session": "^1.17.3",
-    "plaid": "^17.0.0"
+    "connect-pg-simple": "^9.0.1",
+    "dotenv": "^16.4.5",
+    "ejs": "^3.1.10",
+    "express": "^4.21.1",
+    "express-session": "^1.18.1",
+    "pg": "^8.13.1"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

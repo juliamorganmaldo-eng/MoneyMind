@@ -1,122 +1,153 @@
 const express = require('express');
-const router = express.Router();
 const bcrypt = require('bcrypt');
 const { pool } = require('../db');
-const { consumeInvite } = require('../lib/bootstrap');
+const { redirectIfAuthed } = require('../middleware/auth');
 
-const INVITE_ONLY = (process.env.INVITE_ONLY || 'true').toLowerCase() !== 'false';
+const router = express.Router();
 
-// GET /auth/login
-router.get('/login', (req, res) => {
-  if (req.session && req.session.user) {
-    return res.redirect('/dashboard');
-  }
-  res.render('login', { title: 'Sign In' });
+const BCRYPT_ROUNDS = 12;
+const MIN_PASSWORD_LENGTH = 10;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// A precomputed hash of a throwaway value. Used so that failed-lookup logins
+// spend the same time as real ones, defeating user-enumeration via timing.
+const DUMMY_HASH = bcrypt.hashSync('dummy-password-for-timing-equalization', BCRYPT_ROUNDS);
+
+function normalizeEmail(v) {
+  return typeof v === 'string' ? v.trim().toLowerCase() : '';
+}
+
+function normalizeCode(v) {
+  return typeof v === 'string' ? v.trim().toUpperCase() : '';
+}
+
+// Regenerate the session to prevent fixation, then set userId and save.
+function logInAs(req, userId) {
+  return new Promise((resolve, reject) => {
+    req.session.regenerate((err) => {
+      if (err) return reject(err);
+      req.session.userId = userId;
+      req.session.save((err2) => (err2 ? reject(err2) : resolve()));
+    });
+  });
+}
+
+router.get('/login', redirectIfAuthed, (req, res) => {
+  res.render('login', { error: null, email: '' });
 });
 
-// POST /auth/login
-router.post('/login', async (req, res) => {
-  const { email, password } = req.body;
-
-  if (!email || !password) {
-    req.session.flash = { error: 'Email and password are required.' };
-    return res.redirect('/auth/login');
-  }
-
+router.post('/login', redirectIfAuthed, async (req, res, next) => {
   try {
-    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email.trim().toLowerCase()]);
-    const user = result.rows[0];
+    const email = normalizeEmail(req.body.email);
+    const password = typeof req.body.password === 'string' ? req.body.password : '';
 
-    if (!user) {
-      req.session.flash = { error: 'Invalid email or password.' };
-      return res.redirect('/auth/login');
-    }
+    const generic = 'Invalid email or password.';
+    const render = (error) => res.status(401).render('login', { error, email });
 
-    const match = await bcrypt.compare(password, user.password_hash);
-    if (!match) {
-      req.session.flash = { error: 'Invalid email or password.' };
-      return res.redirect('/auth/login');
-    }
+    if (!email || !password) return render(generic);
 
-    req.session.user = { id: user.id, email: user.email, name: user.name, phone: user.phone, is_admin: !!user.is_admin };
-    req.session.flash = { success: `Welcome back, ${user.name || user.email}!` };
-    res.redirect('/dashboard');
-  } catch (err) {
-    console.error('Login error:', err);
-    req.session.flash = { error: 'An unexpected error occurred. Please try again.' };
-    res.redirect('/auth/login');
-  }
-});
-
-// GET /auth/register?token=... — invite landing
-router.get('/register', (req, res) => {
-  if (req.session && req.session.user) return res.redirect('/dashboard');
-  res.render('login', { title: 'Sign In', inviteToken: req.query.token || null });
-});
-
-// POST /auth/register
-router.post('/register', async (req, res) => {
-  const { name, email, password, phone, invite_token } = req.body;
-
-  if (!email || !password) {
-    req.session.flash = { error: 'Email and password are required.' };
-    return res.redirect('/auth/login');
-  }
-
-  if (password.length < 8) {
-    req.session.flash = { error: 'Password must be at least 8 characters.' };
-    return res.redirect('/auth/login');
-  }
-
-  if (INVITE_ONLY) {
-    if (!invite_token) {
-      req.session.flash = { error: 'Registration requires an invite. Ask an admin to send you a link.' };
-      return res.redirect('/auth/login');
-    }
-    const check = await pool.query('SELECT id, email, used_at, expires_at FROM invites WHERE token = $1', [invite_token]);
-    const inv = check.rows[0];
-    if (!inv) { req.session.flash = { error: 'Invite link is invalid.' }; return res.redirect('/auth/login'); }
-    if (inv.used_at) { req.session.flash = { error: 'This invite has already been used.' }; return res.redirect('/auth/login'); }
-    if (inv.expires_at && new Date(inv.expires_at) < new Date()) { req.session.flash = { error: 'This invite has expired.' }; return res.redirect('/auth/login'); }
-    if (inv.email && inv.email.toLowerCase() !== email.trim().toLowerCase()) {
-      req.session.flash = { error: 'This invite is reserved for a different email address.' };
-      return res.redirect('/auth/login');
-    }
-  }
-
-  try {
-    const passwordHash = await bcrypt.hash(password, 12);
-    const result = await pool.query(
-      'INSERT INTO users (email, password_hash, name, phone) VALUES ($1, $2, $3, $4) RETURNING id, email, name, phone',
-      [email.trim().toLowerCase(), passwordHash, name ? name.trim() : null, phone ? phone.trim() : null]
+    const { rows } = await pool.query(
+      'SELECT id, password_hash FROM users WHERE email = $1',
+      [email]
     );
-    const user = result.rows[0];
+    const user = rows[0];
 
-    if (INVITE_ONLY && invite_token) {
-      await consumeInvite(invite_token, user.id);
-    }
+    // Always run a bcrypt compare — equal time whether the user exists or not.
+    const hash = user ? user.password_hash : DUMMY_HASH;
+    const ok = await bcrypt.compare(password, hash);
 
-    req.session.user = { id: user.id, email: user.email, name: user.name, phone: user.phone };
-    req.session.flash = { success: 'Account created! Welcome to MoneyMind.' };
-    res.redirect('/dashboard');
+    if (!user || !ok) return render(generic);
+
+    await logInAs(req, user.id);
+    return res.redirect('/dashboard');
   } catch (err) {
-    if (err.message && err.message.includes('UNIQUE constraint failed')) {
-      req.session.flash = { error: 'An account with that email already exists.' };
-    } else {
-      console.error('Register error:', err);
-      req.session.flash = { error: 'An unexpected error occurred. Please try again.' };
-    }
-    res.redirect('/auth/login');
+    return next(err);
   }
 });
 
-// GET /auth/logout
-router.get('/logout', (req, res) => {
-  req.session.destroy((err) => {
-    if (err) {
-      console.error('Session destroy error:', err);
+router.get('/register', redirectIfAuthed, (req, res) => {
+  res.render('register', { error: null, email: '', inviteCode: '' });
+});
+
+router.post('/register', redirectIfAuthed, async (req, res, next) => {
+  const email = normalizeEmail(req.body.email);
+  const password = typeof req.body.password === 'string' ? req.body.password : '';
+  const inviteCode = normalizeCode(req.body.inviteCode);
+
+  const render = (error, status = 400) =>
+    res.status(status).render('register', { error, email, inviteCode });
+
+  try {
+    if (!EMAIL_RE.test(email)) return render('Please enter a valid email address.');
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      return render(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
     }
-    res.redirect('/auth/login');
+    if (!inviteCode) return render('Invite code is required.');
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Lock the invite row so two concurrent registrations can't share it.
+      const { rows: inviteRows } = await client.query(
+        'SELECT code, used_by_user_id, revoked_at FROM invite_codes WHERE code = $1 FOR UPDATE',
+        [inviteCode]
+      );
+      const invite = inviteRows[0];
+      if (!invite || invite.used_by_user_id || invite.revoked_at) {
+        await client.query('ROLLBACK');
+        return render('That invite code is invalid or has already been used.');
+      }
+
+      const { rows: existing } = await client.query(
+        'SELECT 1 FROM users WHERE email = $1',
+        [email]
+      );
+      if (existing.length) {
+        await client.query('ROLLBACK');
+        return render('An account with that email already exists.');
+      }
+
+      const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+
+      const { rows: inserted } = await client.query(
+        `INSERT INTO users (email, password_hash, invite_code_used)
+         VALUES ($1, $2, $3)
+         RETURNING id`,
+        [email, passwordHash, inviteCode]
+      );
+      const userId = inserted[0].id;
+
+      await client.query(
+        `UPDATE invite_codes
+            SET used_by_user_id = $1, used_at = NOW()
+          WHERE code = $2`,
+        [userId, inviteCode]
+      );
+
+      await client.query('COMMIT');
+
+      await logInAs(req, userId);
+      return res.redirect('/dashboard');
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    return next(err);
+  }
+});
+
+router.post('/logout', (req, res, next) => {
+  req.session.destroy((err) => {
+    if (err) return next(err);
+    // clearCookie's options must mirror the cookie's set-time options or the
+    // browser will leave the cookie in place. path is the one that bites in
+    // practice; httpOnly/sameSite are not used to scope clearing.
+    res.clearCookie('moneymind.sid', { path: '/' });
+    res.redirect('/login');
   });
 });
 

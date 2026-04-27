@@ -1,156 +1,85 @@
 require('dotenv').config();
 
+const path = require('node:path');
 const express = require('express');
 const session = require('express-session');
-const path = require('path');
-const { pool } = require('./db');
-const SqliteStore = require('./session-store')(session);
+const PgSession = require('connect-pg-simple')(session);
 
-const authRouter = require('./routes/auth');
-const accountsRouter = require('./routes/accounts');
-const dashboardRouter = require('./routes/dashboard');
-const findingsRouter = require('./routes/findings');
-const actionsRouter = require('./routes/actions');
-const budgetRouter = require('./routes/budget');
-const budgetSettingsRouter = require('./routes/budget-settings');
-const networthRouter = require('./routes/networth');
-const subscriptionsRouter = require('./routes/subscriptions');
-const spendingRouter = require('./routes/spending');
-const transactionsRouter = require('./routes/transactions');
-const goalsRouter = require('./routes/goals');
-const notificationsRouter = require('./routes/notifications');
-const adminRouter = require('./routes/admin');
-const adminSetupRouter = require('./routes/admin-setup');
-const { scheduleMonthlyReports } = require('./lib/monthly-report');
+const { pool } = require('./db');
 const { bootstrap } = require('./lib/bootstrap');
+const authRoutes = require('./routes/auth');
+const dashboardRoutes = require('./routes/dashboard');
+
+const PORT = Number(process.env.PORT) || 3001;
+const IS_PROD = process.env.NODE_ENV === 'production';
+const SESSION_SECRET = process.env.SESSION_SECRET;
+
+if (!SESSION_SECRET || SESSION_SECRET.length < 32) {
+  console.error(
+    '[fatal] SESSION_SECRET is missing or too short (need ≥ 32 chars). ' +
+    'Generate one with:  node -e "console.log(require(\'crypto\').randomBytes(48).toString(\'base64\'))"'
+  );
+  process.exit(1);
+}
 
 const app = express();
-const PORT = process.env.PORT || 3001;
 
-// View engine
-app.set('view engine', 'ejs');
+if (IS_PROD) {
+  // Needed for secure cookies to work behind a TLS-terminating proxy.
+  app.set('trust proxy', 1);
+}
+
 app.set('views', path.join(__dirname, 'views'));
+app.set('view engine', 'ejs');
+app.disable('x-powered-by');
 
-// Body parsing
-app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
+app.use(express.urlencoded({ extended: false, limit: '32kb' }));
+app.use(express.static(path.join(__dirname, 'public'), { maxAge: IS_PROD ? '1d' : 0 }));
 
-// Static files
-app.use(express.static(path.join(__dirname, 'public')));
-
-// Session store (SQLite-backed)
 app.use(
   session({
-    store: new SqliteStore(),
-    secret: process.env.SESSION_SECRET || 'dev-secret-change-in-production',
+    name: 'moneymind.sid',
+    store: new PgSession({ pool, tableName: 'session', createTableIfMissing: false }),
+    secret: SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
+    rolling: true,
     cookie: {
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      path: '/',
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      secure: IS_PROD,
+      maxAge: 1000 * 60 * 60 * 24 * 14, // 14 days
     },
-    name: 'moneymind.sid',
   })
 );
 
-// Flash messages middleware
-app.use((req, res, next) => {
-  // Expose flash from session to res.locals, then clear it
-  res.locals.flash = req.session.flash || null;
-  if (req.session.flash) {
-    delete req.session.flash;
-  }
-
-  // Expose user to all templates
-  res.locals.user = req.session.user || null;
-
-  next();
-});
-
-// Routes
-app.use('/auth', authRouter);
-app.use('/accounts', accountsRouter);
-app.use('/dashboard', dashboardRouter);
-app.use('/findings', findingsRouter);
-app.use('/actions', actionsRouter);
-app.use('/budget', budgetRouter);
-app.use('/budget-settings', budgetSettingsRouter);
-app.use('/networth', networthRouter);
-app.use('/subscriptions', subscriptionsRouter);
-app.use('/spending', spendingRouter);
-app.use('/transactions', transactionsRouter);
-app.use('/goals', goalsRouter);
-app.use('/notifications', notificationsRouter);
-app.use('/admin-setup', adminSetupRouter);
-app.use('/admin', adminRouter);
-
-// Root redirect
 app.get('/', (req, res) => {
-  if (req.session && req.session.user) {
-    return res.redirect('/dashboard');
-  }
-  res.redirect('/auth/login');
+  if (req.session && req.session.userId) return res.redirect('/dashboard');
+  return res.redirect('/login');
 });
 
-// 404 handler
+app.use(authRoutes);
+app.use(dashboardRoutes);
+
 app.use((req, res) => {
-  res.status(404).send(`
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-      <meta charset="UTF-8">
-      <title>404 — MoneyMind</title>
-      <style>
-        body { font-family: system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #F0F7F2; color: #111827; }
-        h1 { font-size: 4rem; margin: 0; color: #2D6A4F; }
-        p { color: #6B7280; }
-        a { color: #2D6A4F; font-weight: 600; text-decoration: none; }
-        a:hover { text-decoration: underline; }
-      </style>
-    </head>
-    <body>
-      <h1>404</h1>
-      <p>Page not found.</p>
-      <a href="/">Go home</a>
-    </body>
-    </html>
-  `);
+  res.status(404).send('Not found');
 });
 
-// Error handler
-app.use((err, req, res, next) => {
-  console.error('Unhandled error:', err);
-  res.status(500).send(`
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-      <meta charset="UTF-8">
-      <title>Error — MoneyMind</title>
-      <style>
-        body { font-family: system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #F0F7F2; color: #111827; }
-        h1 { font-size: 2rem; margin: 0; color: #EF4444; }
-        p { color: #6B7280; }
-        a { color: #2D6A4F; font-weight: 600; text-decoration: none; }
-      </style>
-    </head>
-    <body>
-      <h1>Something went wrong</h1>
-      <p>${process.env.NODE_ENV === 'development' ? err.message : 'An unexpected error occurred.'}</p>
-      <a href="/">Go home</a>
-    </body>
-    </html>
-  `);
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, _next) => {
+  console.error('[error]', err.stack || err.message);
+  res.status(500).send('Something went wrong.');
 });
 
-app.listen(PORT, async () => {
-  console.log(`MoneyMind web server running on http://localhost:${PORT}`);
-  try {
-    await bootstrap();
-  } catch (err) {
-    console.error('[bootstrap] failed:', err);
-  }
-  scheduleMonthlyReports();
-});
+async function main() {
+  await bootstrap();
+  app.listen(PORT, () => {
+    console.log(`MoneyMind web → http://localhost:${PORT}`);
+  });
+}
 
-module.exports = app;
+main().catch((err) => {
+  console.error('[fatal] startup failed:', err.message);
+  process.exit(1);
+});

@@ -1,9 +1,11 @@
 function requireAuth(req, res, next) {
-  if (!req.session || !req.session.user) {
-    req.session.flash = { error: 'Please sign in to continue.' };
-    return res.redirect('/auth/login');
-  }
-  next();
+  if (req.session && req.session.userId) return next();
+  return res.redirect('/login');
 }
 
-module.exports = { requireAuth };
+function redirectIfAuthed(req, res, next) {
+  if (req.session && req.session.userId) return res.redirect('/dashboard');
+  return next();
+}
+
+module.exports = { requireAuth, redirectIfAuthed };
