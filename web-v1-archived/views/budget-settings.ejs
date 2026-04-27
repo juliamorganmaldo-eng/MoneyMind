@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<%- include('partials/head', { title: 'Budget Settings' }) %>
+<body class="app-page">
+  <div class="app-layout">
+    <%- include('partials/sidebar', { page: 'budget-settings' }) %>
+
+    <main class="main-content">
+      <div class="page-inner">
+
+        <div class="page-header">
+          <div class="page-header-text">
+            <h1 class="page-title">Budget Settings</h1>
+            <p class="page-subtitle">Set monthly spending limits for each category</p>
+          </div>
+        </div>
+
+        <% if (flash && flash.error) { %>
+          <div class="flash flash-error"><%= flash.error %></div>
+        <% } %>
+        <% if (flash && flash.success) { %>
+          <div class="flash flash-success"><%= flash.success %></div>
+        <% } %>
+
+        <!-- Existing budgets -->
+        <form action="/budget-settings" method="POST" class="bsettings-form">
+          <div class="bsettings-card">
+            <div class="bsettings-table-wrap">
+              <table class="bsettings-table">
+                <thead>
+                  <tr>
+                    <th>Category</th>
+                    <th>Current Spending</th>
+                    <th>Monthly Limit</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% categories.forEach(function(cat) { %>
+                    <tr id="cat-row-<%= cat.id %>">
+                      <td class="bsettings-cat"><%= cat.name %></td>
+                      <td class="bsettings-spent">$<%= cat.spent.toFixed(2) %></td>
+                      <td class="bsettings-input-cell">
+                        <input type="hidden" name="id" value="<%= cat.id %>">
+                        <div class="bsettings-input-wrap">
+                          <span class="bsettings-input-prefix">$</span>
+                          <input
+                            type="number"
+                            name="limit"
+                            class="form-input bsettings-input"
+                            value="<%= cat.limit > 0 ? cat.limit : '' %>"
+                            placeholder="0.00"
+                            step="0.01"
+                            min="0"
+                          >
+                        </div>
+                      </td>
+                      <td class="bsettings-delete-cell">
+                        <button type="button" class="btn-icon btn-icon-danger" onclick="deleteCategory(<%= cat.id %>)" title="Remove <%= cat.name %>">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="3 6 5 6 21 6"/>
+                            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                            <path d="M10 11v6"/>
+                            <path d="M14 11v6"/>
+                            <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                          </svg>
+                        </button>
+                      </td>
+                    </tr>
+                  <% }); %>
+                  <% if (categories.length === 0) { %>
+                    <tr><td colspan="4" class="bsettings-empty">No budget categories yet. Add one below.</td></tr>
+                  <% } %>
+                </tbody>
+              </table>
+            </div>
+            <% if (categories.length > 0) { %>
+              <div class="bsettings-actions">
+                <button type="submit" class="btn btn-primary">Save All Limits</button>
+                <a href="/budget" class="btn btn-secondary">Back to Budget Alerts</a>
+              </div>
+            <% } %>
+          </div>
+        </form>
+
+        <!-- Add category -->
+        <div class="bsettings-card bsettings-add-section">
+          <h3 class="bsettings-add-title">Add Category</h3>
+          <form action="/budget-settings/add" method="POST" class="bsettings-add-form">
+            <input
+              type="text"
+              name="category"
+              class="form-input bsettings-add-name"
+              placeholder="Category name"
+              required
+            >
+            <div class="bsettings-input-wrap">
+              <span class="bsettings-input-prefix">$</span>
+              <input
+                type="number"
+                name="monthly_limit"
+                class="form-input bsettings-input"
+                placeholder="0.00"
+                step="0.01"
+                min="0"
+              >
+            </div>
+            <button type="submit" class="btn btn-primary">Add</button>
+          </form>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script>
+    async function deleteCategory(id) {
+      if (!confirm('Remove this budget category?')) return;
+      try {
+        var res = await fetch('/budget-settings/' + id, { method: 'DELETE' });
+        if (res.ok) {
+          var row = document.getElementById('cat-row-' + id);
+          if (row) {
+            row.style.transition = 'opacity 0.2s ease';
+            row.style.opacity = '0';
+            setTimeout(function() { row.remove(); }, 200);
+          }
+        } else {
+          alert('Failed to remove category.');
+        }
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    }
+  </script>
+</body>
+</html>

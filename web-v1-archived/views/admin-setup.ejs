@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<%- include('partials/head', { title: 'Create first admin' }) %>
+<body class="login-page">
+  <div class="login-left">
+    <div class="login-brand">
+      <div class="login-logo">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/>
+          <path d="M12 6v6l4 2"/>
+        </svg>
+      </div>
+      <h1 class="login-app-name">MoneyMind</h1>
+    </div>
+    <p class="login-tagline">First-time setup.</p>
+    <p class="login-sub-tagline">Create the initial admin account. This page will disable itself once one admin exists.</p>
+  </div>
+
+  <div class="login-right">
+    <div class="login-form-container">
+      <div class="form-section">
+        <h2 class="form-title">Create first admin</h2>
+        <p class="form-subtitle">One-time setup — available only while no admin exists.</p>
+
+        <% if (error) { %>
+          <div class="flash flash-error" style="margin-bottom:16px;"><%= error %></div>
+        <% } %>
+
+        <form action="/admin-setup" method="POST" class="auth-form">
+          <div class="form-group">
+            <label for="as-name" class="form-label">Name</label>
+            <input type="text" id="as-name" name="name" class="form-input" placeholder="Admin" autocomplete="name">
+          </div>
+          <div class="form-group">
+            <label for="as-email" class="form-label">Email address</label>
+            <input type="email" id="as-email" name="email" class="form-input" placeholder="you@example.com" autocomplete="email" required>
+          </div>
+          <div class="form-group">
+            <label for="as-pw" class="form-label">Password</label>
+            <input type="password" id="as-pw" name="password" class="form-input" placeholder="Min. 12 characters" autocomplete="new-password" minlength="12" required>
+          </div>
+          <div class="form-group">
+            <label for="as-pw2" class="form-label">Confirm password</label>
+            <input type="password" id="as-pw2" name="confirm_password" class="form-input" autocomplete="new-password" minlength="12" required>
+          </div>
+          <button type="submit" class="btn btn-primary btn-full">Create admin & sign in</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

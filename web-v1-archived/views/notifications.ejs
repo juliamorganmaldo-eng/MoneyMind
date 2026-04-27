@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<%- include('partials/head', { title: 'Notifications' }) %>
+<body class="app-page">
+  <div class="app-layout">
+    <%- include('partials/sidebar', { page: 'notifications' }) %>
+    <main class="main-content">
+      <div class="page-inner">
+
+        <div class="page-header">
+          <div class="page-header-text">
+            <h1 class="page-title">Notifications</h1>
+            <p class="page-subtitle">Monthly reports, alerts, and recommendations from MoneyMind.</p>
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="genReport()">Generate this month's report</button>
+        </div>
+
+        <% if (notifications.length === 0) { %>
+          <div class="empty-state" style="padding:40px; text-align:center; color:#6B7280;">
+            <p>No notifications yet.</p>
+          </div>
+        <% } else { %>
+          <% notifications.forEach(function(n) { %>
+            <div class="notification-card" style="background:#fff; border:1px solid #E5E7EB; border-radius:12px; padding:18px 20px; margin-bottom:12px;">
+              <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                <div>
+                  <div style="font-size:11px; text-transform:uppercase; color:#2D6A4F; letter-spacing:0.05em;"><%= n.type.replace(/_/g,' ') %></div>
+                  <h3 style="margin:4px 0 8px; font-size:17px;"><%= n.title %></h3>
+                </div>
+                <span style="font-size:12px; color:#9CA3AF;"><%= new Date(n.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) %></span>
+              </div>
+              <pre style="white-space:pre-wrap; font-family:inherit; margin:0; font-size:13px; line-height:1.55; color:#374151;"><%= n.body %></pre>
+            </div>
+          <% }); %>
+        <% } %>
+
+      </div>
+    </main>
+  </div>
+
+  <script>
+    async function genReport() {
+      var res = await fetch('/notifications/generate-monthly', { method: 'POST' });
+      var data = await res.json();
+      if (res.ok) window.location.reload();
+      else alert(data.error || 'Failed');
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<%- include('partials/head', { title: 'Subscription Audit' }) %>
+<body class="app-page">
+  <div class="app-layout">
+    <%- include('partials/sidebar', { page: 'subscriptions' }) %>
+
+    <main class="main-content">
+      <div class="page-inner">
+
+        <div class="page-header">
+          <div class="page-header-text">
+            <h1 class="page-title">Subscription Audit</h1>
+            <p class="page-subtitle">Every recurring charge detected across your accounts</p>
+          </div>
+        </div>
+
+        <% if (flash && flash.error) { %>
+          <div class="flash flash-error"><%= flash.error %></div>
+        <% } %>
+        <% if (flash && flash.success) { %>
+          <div class="flash flash-success"><%= flash.success %></div>
+        <% } %>
+
+        <% if (subscriptions.length === 0) { %>
+          <div class="empty-state">
+            <div class="empty-icon">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/>
+                <path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/>
+                <path d="M18 12a2 2 0 0 0 0 4h4v-4z"/>
+              </svg>
+            </div>
+            <h3 class="empty-title">No recurring charges found</h3>
+            <p class="empty-desc">Sync your transactions first, then come back to see your recurring charges.</p>
+          </div>
+        <% } else { %>
+
+          <!-- Total -->
+          <div class="sub-summary">
+            <div class="sub-summary-label">Estimated Monthly Recurring Total</div>
+            <div class="sub-summary-amount">$<%= totalMonthly.toFixed(2) %></div>
+            <div class="sub-summary-note"><%= subscriptions.length %> recurring charge<%= subscriptions.length !== 1 ? 's' : '' %> detected</div>
+          </div>
+
+          <div class="sub-list">
+            <% subscriptions.forEach(function(s) { %>
+              <div class="sub-card">
+                <div class="sub-card-left">
+                  <div class="sub-merchant"><%= s.merchant %></div>
+                  <div class="sub-details">
+                    <span class="badge badge-recurring"><%= s.interval %></span>
+                    <span class="sub-meta"><%= s.occurrences %> charges &middot; <%= s.accounts.join(', ') %></span>
+                  </div>
+                  <div class="sub-last-charge">Last charged: <%= new Date(s.last_charge).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) %></div>
+                </div>
+                <div class="sub-card-right">
+                  <div class="sub-amount">$<%= s.avg_amount.toFixed(2) %><span class="sub-freq">/<%= s.interval === 'weekly' ? 'wk' : (s.interval === 'monthly' ? 'mo' : (s.interval === 'quarterly' ? 'qtr' : 'yr')) %></span></div>
+                  <div class="sub-monthly">~$<%= s.monthly_cost.toFixed(2) %>/mo</div>
+                  <button class="btn btn-danger btn-sm sub-cancel-btn" onclick="draftCancel('<%= s.merchant.replace(/'/g, "\\'") %>', '<%= s.avg_amount.toFixed(2) %>', this)">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                      <polyline points="22,6 12,13 2,6"/>
+                    </svg>
+                    Draft Cancel Email
+                  </button>
+                </div>
+              </div>
+            <% }); %>
+          </div>
+
+        <% } %>
+
+      </div>
+    </main>
+  </div>
+
+  <script>
+    async function draftCancel(merchant, amount, btn) {
+      btn.disabled = true;
+      btn.textContent = 'Drafting...';
+
+      try {
+        var res = await fetch('/subscriptions/cancel-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ merchant: merchant, amount: amount }),
+        });
+
+        if (res.ok) {
+          btn.textContent = 'Drafted!';
+          btn.classList.remove('btn-danger');
+          btn.classList.add('btn-secondary');
+          setTimeout(function() {
+            window.location.href = '/actions';
+          }, 1000);
+        } else {
+          var data = await res.json();
+          alert('Error: ' + (data.error || 'Failed to draft email'));
+          btn.disabled = false;
+          btn.textContent = 'Draft Cancel Email';
+        }
+      } catch (err) {
+        alert('Error: ' + err.message);
+        btn.disabled = false;
+        btn.textContent = 'Draft Cancel Email';
+      }
+    }
+  </script>
+</body>
+</html>

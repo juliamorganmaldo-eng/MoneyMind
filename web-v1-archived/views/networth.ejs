@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<%- include('partials/head', { title: 'Net Worth' }) %>
+<body class="app-page">
+  <div class="app-layout">
+    <%- include('partials/sidebar', { page: 'networth' }) %>
+
+    <main class="main-content">
+      <div class="page-inner">
+
+        <div class="page-header">
+          <div class="page-header-text">
+            <h1 class="page-title">Net Worth</h1>
+            <p class="page-subtitle">Real-time balances from your connected accounts</p>
+          </div>
+        </div>
+
+        <% if (!hasAccounts) { %>
+          <div class="empty-state">
+            <div class="empty-icon">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="4" width="20" height="16" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>
+              </svg>
+            </div>
+            <h3 class="empty-title">No accounts connected</h3>
+            <p class="empty-desc">Connect your bank accounts to see your net worth breakdown.</p>
+            <a href="/accounts" class="btn btn-primary">Connect Accounts</a>
+          </div>
+        <% } else { %>
+
+          <!-- Net Worth Summary -->
+          <div class="nw-summary">
+            <div class="nw-card nw-card-main">
+              <div class="nw-label">Net Worth</div>
+              <div class="nw-value <%= netWorth >= 0 ? 'nw-positive' : 'nw-negative' %>">
+                <%= netWorth < 0 ? '-' : '' %>$<%= Math.abs(netWorth).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %>
+              </div>
+            </div>
+            <div class="nw-breakdown">
+              <div class="nw-card nw-card-assets">
+                <div class="nw-label">Total Assets</div>
+                <div class="nw-value nw-positive">$<%= totalAssets.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %></div>
+              </div>
+              <div class="nw-card nw-card-debt">
+                <div class="nw-label">Total Debt</div>
+                <div class="nw-value nw-negative">$<%= totalLiabilities.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Assets -->
+          <% if (assets.length > 0) { %>
+            <div class="nw-section">
+              <h3 class="nw-section-title">Assets</h3>
+              <div class="nw-accounts-list">
+                <% assets.forEach(function(a) { %>
+                  <div class="nw-account-row">
+                    <div class="nw-account-icon nw-icon-asset">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <% if (a.subtype === 'savings') { %>
+                          <path d="M19 5c-1.5 0-2.8 1.4-3 2-3.5-1.5-11-.3-11 5 0 1.8 0 3 2 4.5V20h4v-2h3v2h4v-4c1-0.5 1.7-1 2-2h2v-4h-2c0-1-.5-1.5-1-2z"/>
+                        <% } else if (a.subtype === 'checking') { %>
+                          <rect x="2" y="4" width="20" height="16" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>
+                        <% } else if (a.type === 'investment') { %>
+                          <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>
+                        <% } else { %>
+                          <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+                        <% } %>
+                      </svg>
+                    </div>
+                    <div class="nw-account-info">
+                      <span class="nw-account-name"><%= a.name %><% if (a.mask) { %> ****<%= a.mask %><% } %></span>
+                      <span class="nw-account-inst"><%= a.institution %> &middot; <%= a.subtype || a.type %></span>
+                    </div>
+                    <div class="nw-account-balance">
+                      <span class="nw-bal-current">$<%= a.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %></span>
+                      <% if (a.available != null && a.available !== a.balance) { %>
+                        <span class="nw-bal-available">$<%= a.available.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %> available</span>
+                      <% } %>
+                    </div>
+                  </div>
+                <% }); %>
+              </div>
+            </div>
+          <% } %>
+
+          <!-- Liabilities -->
+          <% if (liabilities.length > 0) { %>
+            <div class="nw-section">
+              <h3 class="nw-section-title">Liabilities</h3>
+              <div class="nw-accounts-list">
+                <% liabilities.forEach(function(a) { %>
+                  <div class="nw-account-row">
+                    <div class="nw-account-icon nw-icon-debt">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/>
+                      </svg>
+                    </div>
+                    <div class="nw-account-info">
+                      <span class="nw-account-name"><%= a.name %><% if (a.mask) { %> ****<%= a.mask %><% } %></span>
+                      <span class="nw-account-inst"><%= a.institution %> &middot; <%= a.subtype || a.type %></span>
+                    </div>
+                    <div class="nw-account-balance">
+                      <span class="nw-bal-current nw-negative">$<%= a.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %></span>
+                    </div>
+                  </div>
+                <% }); %>
+              </div>
+            </div>
+          <% } %>
+
+        <% } %>
+
+      </div>
+    </main>
+  </div>
+</body>
+</html>

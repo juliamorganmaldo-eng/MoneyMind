@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<%- include('partials/head', { title: 'Budget Alerts' }) %>
+<body class="app-page">
+  <div class="app-layout">
+    <%- include('partials/sidebar', { page: 'budget' }) %>
+
+    <main class="main-content">
+      <div class="page-inner">
+
+        <div class="page-header">
+          <div class="page-header-text">
+            <h1 class="page-title">Budget Alerts</h1>
+            <p class="page-subtitle">Track your spending against monthly limits &mdash; <%= monthName %></p>
+          </div>
+        </div>
+
+        <% if (flash && flash.error) { %>
+          <div class="flash flash-error"><%= flash.error %></div>
+        <% } %>
+        <% if (flash && flash.success) { %>
+          <div class="flash flash-success"><%= flash.success %></div>
+        <% } %>
+
+        <!-- Summary -->
+        <div class="stats-grid" style="grid-template-columns: repeat(2, 1fr); margin-bottom: 2rem;">
+          <div class="stat-card">
+            <div class="stat-number">$<%= totalSpent.toLocaleString('en-US', { minimumFractionDigits: 2 }) %></div>
+            <div class="stat-label">Spent This Month</div>
+          </div>
+          <div class="stat-card" style="border-left-color: <%= totalBudget > 0 && totalSpent > totalBudget ? 'var(--red)' : 'var(--green-500)' %>;">
+            <div class="stat-number" style="color: <%= totalBudget > 0 && totalSpent > totalBudget ? 'var(--red)' : 'var(--green-700)' %>;">$<%= totalBudget.toLocaleString('en-US', { minimumFractionDigits: 2 }) %></div>
+            <div class="stat-label">Total Budget</div>
+          </div>
+        </div>
+
+        <!-- Active Budgets -->
+        <% if (budgets.length > 0) { %>
+          <div class="budget-list">
+            <% budgets.forEach(function(b) { %>
+              <% var isWarning = b.pct >= 80 && b.pct < 100; %>
+              <% var isOver = b.pct >= 100; %>
+              <div class="budget-card <%= isOver ? 'budget-over' : (isWarning ? 'budget-warning' : '') %>">
+                <div class="budget-card-header budget-drilldown-toggle" onclick="toggleDrilldown(this)" role="button" tabindex="0">
+                  <div class="budget-card-left">
+                    <svg class="drilldown-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                    <span class="budget-category"><%= b.category %></span>
+                    <span class="budget-amounts">
+                      $<%= b.spent.toFixed(2) %> of $<%= b.monthly_limit.toFixed(2) %>
+                    </span>
+                  </div>
+                  <div class="budget-card-right">
+                    <span class="budget-pct <%= isOver ? 'pct-over' : (isWarning ? 'pct-warning' : 'pct-ok') %>"><%= Math.round(b.pct) %>%</span>
+                    <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); deleteBudget(<%= b.id %>)" title="Remove budget">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                  </div>
+                </div>
+                <div class="budget-bar-track">
+                  <div class="budget-bar-fill <%= isOver ? 'bar-over' : (isWarning ? 'bar-warning' : 'bar-ok') %>" style="width: <%= Math.min(b.pct, 100) %>%;"></div>
+                </div>
+                <% if (isOver) { %>
+                  <div class="budget-alert">Over budget by $<%= (b.spent - b.monthly_limit).toFixed(2) %></div>
+                <% } else if (isWarning) { %>
+                  <div class="budget-alert budget-alert-warning">$<%= (b.monthly_limit - b.spent).toFixed(2) %> remaining &mdash; approaching limit</div>
+                <% } %>
+                <div class="drilldown-panel">
+                  <% var txns = txnsByCategory[b.category] || []; %>
+                  <% if (txns.length === 0) { %>
+                    <div class="drilldown-empty">No transactions this month</div>
+                  <% } else { %>
+                    <table class="drilldown-table">
+                      <thead><tr><th>Date</th><th>Merchant</th><th class="text-right">Amount</th><th>Move to</th></tr></thead>
+                      <tbody>
+                        <% txns.forEach(function(t) { %>
+                          <tr data-txn-id="<%= t.id %>" data-current-cat="<%= b.category %>">
+                            <td class="drilldown-date"><%= new Date(t.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) %></td>
+                            <td class="drilldown-merchant"><%= t.merchant %></td>
+                            <td class="drilldown-amount text-right">$<%= t.amount.toFixed(2) %></td>
+                            <td class="drilldown-reassign">
+                              <select class="reassign-select" onchange="reassignTransaction(this)" data-txn-id="<%= t.id %>" data-amount="<%= t.amount %>">
+                                <% userCategories.forEach(function(uc) { %>
+                                  <option value="<%= uc %>" <%= uc === b.category ? 'selected' : '' %>><%= uc %></option>
+                                <% }); %>
+                              </select>
+                            </td>
+                          </tr>
+                        <% }); %>
+                      </tbody>
+                    </table>
+                  <% } %>
+                </div>
+              </div>
+            <% }); %>
+          </div>
+        <% } %>
+
+        <div class="budget-form-section" style="text-align: center;">
+          <a href="/budget-settings" class="btn btn-primary">Manage Budget Limits</a>
+        </div>
+
+        <!-- All spending categories overview -->
+        <div class="budget-overview">
+          <h3 class="budget-form-title">All Spending This Month</h3>
+          <div class="budget-overview-grid">
+            <% categories.forEach(function(cat) { %>
+              <% var amt = spending[cat] || 0; %>
+              <% if (amt > 0) { %>
+                <div class="budget-overview-entry">
+                  <div class="budget-overview-item budget-drilldown-toggle" onclick="toggleDrilldown(this)" role="button" tabindex="0">
+                    <div class="budget-overview-left">
+                      <svg class="drilldown-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                      <span class="budget-overview-cat"><%= cat %></span>
+                    </div>
+                    <span class="budget-overview-amt">$<%= amt.toFixed(2) %></span>
+                  </div>
+                  <div class="drilldown-panel">
+                    <% var txns = txnsByCategory[cat] || []; %>
+                    <% if (txns.length === 0) { %>
+                      <div class="drilldown-empty">No transactions this month</div>
+                    <% } else { %>
+                      <table class="drilldown-table">
+                        <thead><tr><th>Date</th><th>Merchant</th><th class="text-right">Amount</th><th>Move to</th></tr></thead>
+                        <tbody>
+                          <% txns.forEach(function(t) { %>
+                            <tr data-txn-id="<%= t.id %>" data-current-cat="<%= cat %>">
+                              <td class="drilldown-date"><%= new Date(t.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) %></td>
+                              <td class="drilldown-merchant"><%= t.merchant %></td>
+                              <td class="drilldown-amount text-right">$<%= t.amount.toFixed(2) %></td>
+                              <td class="drilldown-reassign">
+                                <select class="reassign-select" onchange="reassignTransaction(this)" data-txn-id="<%= t.id %>" data-amount="<%= t.amount %>">
+                                  <% userCategories.forEach(function(uc) { %>
+                                    <option value="<%= uc %>" <%= uc === cat ? 'selected' : '' %>><%= uc %></option>
+                                  <% }); %>
+                                </select>
+                              </td>
+                            </tr>
+                          <% }); %>
+                        </tbody>
+                      </table>
+                    <% } %>
+                  </div>
+                </div>
+              <% } %>
+            <% }); %>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script>
+    async function deleteBudget(id) {
+      if (!confirm('Remove this budget?')) return;
+      try {
+        var res = await fetch('/budget/' + id, { method: 'DELETE' });
+        if (res.ok) window.location.reload();
+        else alert('Failed to remove budget.');
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    }
+
+    function toggleDrilldown(el) {
+      var container = el.closest('.budget-card') || el.closest('.budget-overview-entry');
+      if (!container) return;
+      var panel = container.querySelector('.drilldown-panel');
+      if (!panel) return;
+
+      var isOpen = container.classList.toggle('drilldown-open');
+      if (isOpen) {
+        panel.style.maxHeight = panel.scrollHeight + 'px';
+      } else {
+        panel.style.maxHeight = '0';
+      }
+    }
+
+    async function reassignTransaction(selectEl) {
+      var txnId = selectEl.getAttribute('data-txn-id');
+      var newCategory = selectEl.value;
+      var row = selectEl.closest('tr');
+      var oldCategory = row.getAttribute('data-current-cat');
+
+      if (newCategory === oldCategory) return;
+
+      selectEl.disabled = true;
+      try {
+        var resp = await fetch('/budget/reassign', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ transactionId: txnId, newCategory: newCategory }),
+        });
+        var data = await resp.json();
+        if (!data.success) throw new Error(data.error || 'Failed');
+
+        // Fade out the moved row
+        row.style.transition = 'opacity 0.25s ease';
+        row.style.opacity = '0';
+        setTimeout(function() { row.remove(); }, 250);
+
+        // Update budget cards with new totals
+        updateBudgetCards(data.budgets);
+
+        // Update "All Spending" amounts
+        updateOverviewAmounts(data.spending);
+      } catch (err) {
+        alert('Failed to reassign: ' + err.message);
+        selectEl.value = oldCategory;
+      } finally {
+        selectEl.disabled = false;
+      }
+    }
+
+    function updateBudgetCards(budgets) {
+      document.querySelectorAll('.budget-card').forEach(function(card) {
+        var catEl = card.querySelector('.budget-category');
+        if (!catEl) return;
+        var cat = catEl.textContent.trim();
+        var info = budgets[cat];
+        if (!info) return;
+
+        // Update amounts text
+        var amountsEl = card.querySelector('.budget-amounts');
+        if (amountsEl) {
+          amountsEl.textContent = '$' + info.spent.toFixed(2) + ' of $' + info.monthly_limit.toFixed(2);
+        }
+
+        // Update percentage badge
+        var pctEl = card.querySelector('.budget-pct');
+        if (pctEl) {
+          var pct = Math.round(info.pct);
+          pctEl.textContent = pct + '%';
+          pctEl.className = 'budget-pct ' + (info.pct >= 100 ? 'pct-over' : (info.pct >= 80 ? 'pct-warning' : 'pct-ok'));
+        }
+
+        // Update progress bar
+        var barFill = card.querySelector('.budget-bar-fill');
+        if (barFill) {
+          barFill.style.width = Math.min(info.pct, 100) + '%';
+          barFill.className = 'budget-bar-fill ' + (info.pct >= 100 ? 'bar-over' : (info.pct >= 80 ? 'bar-warning' : 'bar-ok'));
+        }
+
+        // Update card border color
+        card.className = 'budget-card' + (info.pct >= 100 ? ' budget-over' : (info.pct >= 80 ? ' budget-warning' : ''));
+        if (card.classList.contains('drilldown-open')) card.classList.add('drilldown-open');
+
+        // Update alert message
+        var existingAlert = card.querySelector('.budget-alert');
+        if (existingAlert) existingAlert.remove();
+        var barTrack = card.querySelector('.budget-bar-track');
+        if (info.pct >= 100) {
+          var alertDiv = document.createElement('div');
+          alertDiv.className = 'budget-alert';
+          alertDiv.textContent = 'Over budget by $' + (info.spent - info.monthly_limit).toFixed(2);
+          barTrack.insertAdjacentElement('afterend', alertDiv);
+        } else if (info.pct >= 80) {
+          var alertDiv = document.createElement('div');
+          alertDiv.className = 'budget-alert budget-alert-warning';
+          alertDiv.innerHTML = '$' + (info.monthly_limit - info.spent).toFixed(2) + ' remaining &mdash; approaching limit';
+          barTrack.insertAdjacentElement('afterend', alertDiv);
+        }
+      });
+    }
+
+    function updateOverviewAmounts(spending) {
+      document.querySelectorAll('.budget-overview-entry').forEach(function(entry) {
+        var catEl = entry.querySelector('.budget-overview-cat');
+        var amtEl = entry.querySelector('.budget-overview-amt');
+        if (!catEl || !amtEl) return;
+        var cat = catEl.textContent.trim();
+        if (cat in spending) {
+          amtEl.textContent = '$' + spending[cat].toFixed(2);
+        }
+      });
+    }
+  </script>
+</body>
+</html>

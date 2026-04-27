@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<%- include('partials/head', { title: 'Spending' }) %>
+<body class="app-page">
+  <div class="app-layout">
+    <%- include('partials/sidebar', { page: 'spending' }) %>
+
+    <main class="main-content">
+      <div class="page-inner">
+
+        <div class="page-header">
+          <div class="page-header-text">
+            <h1 class="page-title">Spending Breakdown</h1>
+            <p class="page-subtitle"><%= curMonthName %> vs. <%= prevMonthName %></p>
+          </div>
+        </div>
+
+        <!-- Summary Stats -->
+        <div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 2rem;">
+          <div class="stat-card">
+            <div class="stat-number">$<%= totalCurrent.toLocaleString('en-US', { minimumFractionDigits: 2 }) %></div>
+            <div class="stat-label">This Month</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-number" style="color: var(--text-secondary);">$<%= totalPrevious.toLocaleString('en-US', { minimumFractionDigits: 2 }) %></div>
+            <div class="stat-label">Last Month</div>
+          </div>
+          <div class="stat-card" style="border-left-color: <%= savingsRate !== null && savingsRate >= 0 ? 'var(--green-500)' : 'var(--red)' %>;">
+            <% if (savingsRate !== null) { %>
+              <div class="stat-number" style="color: <%= savingsRate >= 0 ? 'var(--green-700)' : 'var(--red)' %>;"><%= savingsRate %>%</div>
+              <div class="stat-label">Savings Rate</div>
+            <% } else { %>
+              <div class="stat-number" style="color: var(--text-muted);">&mdash;</div>
+              <div class="stat-label">Savings Rate (no income data)</div>
+            <% } %>
+          </div>
+        </div>
+
+        <!-- Savings Rate Detail -->
+        <% if (savingsRate !== null) { %>
+          <div class="savings-detail">
+            <div class="savings-bar-container">
+              <div class="savings-bar-label">
+                <span>Spending: $<%= totalCurrent.toLocaleString('en-US', { minimumFractionDigits: 2 }) %></span>
+                <span>Income: $<%= totalIncome.toLocaleString('en-US', { minimumFractionDigits: 2 }) %></span>
+              </div>
+              <div class="savings-bar-track">
+                <div class="savings-bar-fill <%= savingsRate >= 20 ? 'bar-ok' : (savingsRate >= 0 ? 'bar-warning' : 'bar-over') %>" style="width: <%= Math.min(100, Math.max(0, 100 - savingsRate)) %>%;"></div>
+              </div>
+              <div class="savings-bar-caption">
+                <% if (savingsRate >= 20) { %>
+                  You're saving <%= savingsRate %>% of your income this month. Great job!
+                <% } else if (savingsRate >= 0) { %>
+                  You're saving <%= savingsRate %>% of your income. Aim for 20% or more.
+                <% } else { %>
+                  You're spending more than you earn this month. Consider cutting back.
+                <% } %>
+                <% if (prevSavingsRate !== null) { %>
+                  &mdash; Last month: <%= prevSavingsRate %>%
+                <% } %>
+              </div>
+            </div>
+          </div>
+        <% } %>
+
+        <!-- Charts -->
+        <div class="two-col" style="margin-bottom: 2rem;">
+          <div class="panel">
+            <div class="panel-header">
+              <h2 class="panel-title">By Category</h2>
+            </div>
+            <div style="padding: 1.5rem;">
+              <canvas id="pieChart" height="280"></canvas>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-header">
+              <h2 class="panel-title">Month-over-Month</h2>
+            </div>
+            <div style="padding: 1.5rem;">
+              <canvas id="barChart" height="280"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- Category Comparison Table -->
+        <div class="panel">
+          <div class="panel-header">
+            <h2 class="panel-title">Category Comparison</h2>
+          </div>
+          <div class="spending-table-wrap">
+            <table class="spending-table">
+              <thead>
+                <tr>
+                  <th>Category</th>
+                  <th class="text-right"><%= curMonthName.split(' ')[0] %></th>
+                  <th class="text-right"><%= prevMonthName.split(' ')[0] %></th>
+                  <th class="text-right">Change</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% chartData.forEach(function(row) { %>
+                  <% var isUp = row.change !== null && row.change > 15; %>
+                  <tr class="<%= isUp ? 'spending-row-up' : '' %>">
+                    <td>
+                      <span class="spending-dot" style="background: <%= row.color %>;"></span>
+                      <%= row.category %>
+                    </td>
+                    <td class="text-right">$<%= row.current.toFixed(2) %></td>
+                    <td class="text-right" style="color: var(--text-muted);">$<%= row.previous.toFixed(2) %></td>
+                    <td class="text-right">
+                      <% if (row.change !== null) { %>
+                        <span class="spending-change <%= row.change > 15 ? 'change-up' : (row.change < -15 ? 'change-down' : 'change-flat') %>">
+                          <%= row.change > 0 ? '+' : '' %><%= row.change %>%
+                        </span>
+                      <% } else { %>
+                        <span style="color: var(--text-muted);">&mdash;</span>
+                      <% } %>
+                    </td>
+                  </tr>
+                <% }); %>
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td><strong>Total</strong></td>
+                  <td class="text-right"><strong>$<%= totalCurrent.toFixed(2) %></strong></td>
+                  <td class="text-right" style="color: var(--text-muted);"><strong>$<%= totalPrevious.toFixed(2) %></strong></td>
+                  <td class="text-right">
+                    <% var totalChange = totalPrevious > 0 ? (((totalCurrent - totalPrevious) / totalPrevious) * 100).toFixed(1) : null; %>
+                    <% if (totalChange !== null) { %>
+                      <strong class="spending-change <%= totalChange > 0 ? 'change-up' : (totalChange < 0 ? 'change-down' : 'change-flat') %>">
+                        <%= totalChange > 0 ? '+' : '' %><%= totalChange %>%
+                      </strong>
+                    <% } %>
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+  <script>
+    var chartData = <%- JSON.stringify(chartData) %>;
+
+    // Pie Chart
+    new Chart(document.getElementById('pieChart'), {
+      type: 'doughnut',
+      data: {
+        labels: chartData.map(d => d.category),
+        datasets: [{
+          data: chartData.map(d => d.current),
+          backgroundColor: chartData.map(d => d.color),
+          borderWidth: 2,
+          borderColor: '#fff',
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'right',
+            labels: { font: { family: 'Inter', size: 12 }, padding: 12, usePointStyle: true, pointStyleWidth: 8 }
+          },
+          tooltip: {
+            callbacks: {
+              label: function(ctx) {
+                var total = ctx.dataset.data.reduce(function(a, b) { return a + b; }, 0);
+                var pct = ((ctx.parsed / total) * 100).toFixed(1);
+                return ctx.label + ': $' + ctx.parsed.toFixed(2) + ' (' + pct + '%)';
+              }
+            }
+          }
+        }
+      }
+    });
+
+    // Bar Chart — Month over Month
+    new Chart(document.getElementById('barChart'), {
+      type: 'bar',
+      data: {
+        labels: chartData.map(d => d.category),
+        datasets: [
+          {
+            label: '<%= curMonthName.split(" ")[0] %>',
+            data: chartData.map(d => d.current),
+            backgroundColor: chartData.map(d => d.color),
+            borderRadius: 4,
+          },
+          {
+            label: '<%= prevMonthName.split(" ")[0] %>',
+            data: chartData.map(d => d.previous),
+            backgroundColor: chartData.map(d => d.color + '55'),
+            borderRadius: 4,
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: {
+            ticks: { font: { family: 'Inter', size: 11 }, maxRotation: 45 },
+            grid: { display: false }
+          },
+          y: {
+            beginAtZero: true,
+            ticks: {
+              font: { family: 'Inter', size: 11 },
+              callback: function(v) { return '$' + v; }
+            }
+          }
+        },
+        plugins: {
+          legend: {
+            labels: { font: { family: 'Inter', size: 12 }, usePointStyle: true, pointStyleWidth: 8 }
+          },
+          tooltip: {
+            callbacks: {
+              label: function(ctx) { return ctx.dataset.label + ': $' + ctx.parsed.y.toFixed(2); }
+            }
+          }
+        }
+      }
+    });
+  </script>
+</body>
+</html>

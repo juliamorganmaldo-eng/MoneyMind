@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<%- include('partials/head', { title: 'Findings Feed' }) %>
+<body class="app-page">
+  <div class="app-layout">
+    <%- include('partials/sidebar', { page: 'findings' }) %>
+
+    <main class="main-content">
+      <div class="page-inner">
+
+        <div class="page-header">
+          <div class="page-header-text">
+            <h1 class="page-title">Findings Feed</h1>
+            <p class="page-subtitle">Insights discovered from your transaction data</p>
+          </div>
+        </div>
+
+        <div class="tab-bar">
+          <a href="/findings" class="tab <%= activeType === 'all' ? 'active' : '' %>">All</a>
+          <a href="/findings?type=recurring" class="tab <%= activeType === 'recurring' ? 'active' : '' %>">Recurring</a>
+          <a href="/findings?type=duplicate_subscription" class="tab <%= activeType === 'duplicate_subscription' ? 'active' : '' %>">Duplicates</a>
+          <a href="/findings?type=price_change" class="tab <%= activeType === 'price_change' ? 'active' : '' %>">Price Changes</a>
+          <a href="/findings?type=other" class="tab <%= activeType === 'other' ? 'active' : '' %>">Other</a>
+        </div>
+
+        <% if (findings.length === 0) { %>
+          <div class="empty-state">
+            <div class="empty-icon">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+              </svg>
+            </div>
+            <h3 class="empty-title">No findings yet</h3>
+            <p class="empty-desc">Run an analysis from the MCP server to start discovering insights about your spending.</p>
+          </div>
+        <% } else { %>
+          <div class="findings-list">
+            <% findings.forEach(function(f) { %>
+              <%
+                var borderClass = 'border-other';
+                var badgeClass = 'badge-other';
+                if (f.type === 'recurring') { borderClass = 'border-recurring'; badgeClass = 'badge-recurring'; }
+                else if (f.type === 'duplicate_subscription') { borderClass = 'border-duplicate'; badgeClass = 'badge-duplicate'; }
+                else if (f.type === 'price_change') { borderClass = 'border-price'; badgeClass = 'badge-price'; }
+              %>
+              <div class="finding-card <%= borderClass %>">
+                <div class="finding-top">
+                  <span class="badge <%= badgeClass %>"><%= f.type.replace(/_/g, ' ') %></span>
+                  <span class="finding-date"><%= new Date(f.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) %></span>
+                </div>
+                <h3 class="finding-title"><%= f.title %></h3>
+                <% if (f.description) { %>
+                  <p class="finding-desc"><%= f.description %></p>
+                <% } %>
+                <% if (f.data_json) { %>
+                  <details class="finding-data">
+                    <summary class="finding-data-toggle">View data</summary>
+                    <pre class="finding-data-content"><%= JSON.stringify(typeof f.data_json === 'string' ? JSON.parse(f.data_json) : f.data_json, null, 2) %></pre>
+                  </details>
+                <% } %>
+              </div>
+            <% }); %>
+          </div>
+        <% } %>
+
+      </div>
+    </main>
+  </div>
+</body>
+</html>
