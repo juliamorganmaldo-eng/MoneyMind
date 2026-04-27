@@ -12,9 +12,110 @@
 
   <main class="app-main">
     <section class="panel">
-      <h1>Welcome, <%= email %></h1>
-      <p class="subtitle">Your dashboard is ready. Features come online in later steps.</p>
+      <div class="panel-header">
+        <div>
+          <h1>Welcome, <%= email %></h1>
+          <p class="subtitle">Connect a bank to start tracking your accounts.</p>
+        </div>
+        <button id="connect-bank" class="btn-primary btn-inline" type="button">
+          + Connect Bank
+        </button>
+      </div>
+
+      <div id="connect-status" class="alert" role="status" hidden></div>
+    </section>
+
+    <section class="panel">
+      <h2 class="panel-title">Connected Accounts</h2>
+
+      <% if (!items || items.length === 0) { %>
+        <p class="empty">No banks connected yet. Click <strong>Connect Bank</strong> to add one.</p>
+      <% } else { %>
+        <ul class="institution-list">
+          <% items.forEach(function(item) { %>
+            <li class="institution">
+              <div class="institution-name">
+                <%= item.institution_name || 'Unnamed institution' %>
+              </div>
+              <div class="institution-meta">
+                <%= item.account_count %> account<%= item.account_count === 1 ? '' : 's' %>
+                · connected <%= new Date(item.created_at).toLocaleDateString() %>
+              </div>
+            </li>
+          <% }); %>
+        </ul>
+      <% } %>
     </section>
   </main>
+
+  <script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
+  <script>
+    (function () {
+      var btn = document.getElementById('connect-bank');
+      var status = document.getElementById('connect-status');
+
+      function showStatus(text, kind) {
+        status.textContent = text;
+        status.className = 'alert ' + (kind === 'error' ? 'alert-error' : 'alert-info');
+        status.hidden = false;
+      }
+      function clearStatus() { status.hidden = true; status.textContent = ''; }
+
+      async function startLink() {
+        clearStatus();
+        btn.disabled = true;
+
+        // 1. Get a link token (auth-required, server scopes it to this user).
+        let linkToken;
+        try {
+          const r = await fetch('/api/plaid/create-link-token', {
+            method: 'POST',
+            credentials: 'same-origin',
+          });
+          if (!r.ok) throw new Error('status ' + r.status);
+          const json = await r.json();
+          linkToken = json.link_token;
+        } catch (e) {
+          btn.disabled = false;
+          showStatus('Could not start Plaid Link. Check the server logs.', 'error');
+          return;
+        }
+
+        // 2. Open Plaid Link with that token.
+        var handler = Plaid.create({
+          token: linkToken,
+          onSuccess: async function (public_token /*, metadata */) {
+            showStatus('Connecting…', 'info');
+            try {
+              const r = await fetch('/api/plaid/exchange-public-token', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ public_token: public_token }),
+              });
+              if (!r.ok) {
+                const j = await r.json().catch(function () { return {}; });
+                throw new Error(j.error || ('status ' + r.status));
+              }
+              // Reload so the dashboard renders the newly-saved item.
+              window.location.reload();
+            } catch (e) {
+              btn.disabled = false;
+              showStatus('Could not save the bank: ' + e.message, 'error');
+            }
+          },
+          onExit: function (err /*, metadata */) {
+            btn.disabled = false;
+            if (err) {
+              showStatus(err.display_message || err.error_message || 'Plaid Link closed.', 'error');
+            }
+          },
+        });
+        handler.open();
+      }
+
+      btn.addEventListener('click', startLink);
+    })();
+  </script>
 </body>
 </html>

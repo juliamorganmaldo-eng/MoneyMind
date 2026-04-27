@@ -7,8 +7,10 @@ const PgSession = require('connect-pg-simple')(session);
 
 const { pool } = require('./db');
 const { bootstrap } = require('./lib/bootstrap');
+const { assertEncryptionKey } = require('./lib/crypto');
 const authRoutes = require('./routes/auth');
 const dashboardRoutes = require('./routes/dashboard');
+const plaidRoutes = require('./routes/plaid');
 
 const PORT = Number(process.env.PORT) || 3001;
 const IS_PROD = process.env.NODE_ENV === 'production';
@@ -19,6 +21,13 @@ if (!SESSION_SECRET || SESSION_SECRET.length < 32) {
     '[fatal] SESSION_SECRET is missing or too short (need ≥ 32 chars). ' +
     'Generate one with:  node -e "console.log(require(\'crypto\').randomBytes(48).toString(\'base64\'))"'
   );
+  process.exit(1);
+}
+
+try {
+  assertEncryptionKey();
+} catch (err) {
+  console.error('[fatal] ' + err.message);
   process.exit(1);
 }
 
@@ -61,6 +70,7 @@ app.get('/', (req, res) => {
 
 app.use(authRoutes);
 app.use(dashboardRoutes);
+app.use(plaidRoutes);
 
 app.use((req, res) => {
   res.status(404).send('Not found');

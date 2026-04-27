@@ -50,3 +50,38 @@ BEGIN
 END$$;
 
 CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON "session" ("expire");
+
+-- Plaid Item: one per (user, financial institution) connection.
+-- The encrypted access token is the only durable secret in this table.
+CREATE TABLE IF NOT EXISTS plaid_items (
+  id                     SERIAL PRIMARY KEY,
+  user_id                INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  institution_name       TEXT,
+  institution_id         TEXT,
+  access_token_encrypted TEXT NOT NULL,
+  item_id                TEXT NOT NULL UNIQUE,
+  cursor                 TEXT,
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_plaid_items_user_id ON plaid_items(user_id);
+
+CREATE TABLE IF NOT EXISTS accounts (
+  id                SERIAL PRIMARY KEY,
+  user_id           INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  plaid_item_id     INTEGER NOT NULL REFERENCES plaid_items(id) ON DELETE CASCADE,
+  plaid_account_id  TEXT NOT NULL,
+  name              TEXT,
+  official_name     TEXT,
+  type              TEXT,
+  subtype           TEXT,
+  mask              TEXT,
+  current_balance   NUMERIC(14,2),
+  available_balance NUMERIC(14,2),
+  iso_currency_code TEXT,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT accounts_user_account_unique UNIQUE (user_id, plaid_account_id)
+);
+CREATE INDEX IF NOT EXISTS idx_accounts_user_id ON accounts(user_id);
+CREATE INDEX IF NOT EXISTS idx_accounts_plaid_item_id ON accounts(plaid_item_id);
