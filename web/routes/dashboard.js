@@ -101,4 +101,9 @@ router.get('/transactions', requireAuth, async (req, res, next) => {
   }
 });
 
+router.get('/categories', requireAuth, (req, res) => {
+  // The page itself is just a shell — JS hydrates from /api/categories.
+  res.render('categories');
+});
+
 module.exports = router;

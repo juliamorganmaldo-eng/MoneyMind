@@ -2,6 +2,7 @@ const express = require('express');
 const bcrypt = require('bcrypt');
 const { pool } = require('../db');
 const { redirectIfAuthed } = require('../middleware/auth');
+const { DEFAULT_CATEGORY_NAMES } = require('../lib/category-mapping');
 
 const router = express.Router();
 
@@ -124,6 +125,17 @@ router.post('/register', redirectIfAuthed, async (req, res, next) => {
           WHERE code = $2`,
         [userId, inviteCode]
       );
+
+      // Seed the 5 default MoneyMind categories. Same DB transaction as
+      // the user insert — if any seed fails, the entire registration
+      // (user, invite update, categories) rolls back.
+      for (let i = 0; i < DEFAULT_CATEGORY_NAMES.length; i++) {
+        await client.query(
+          `INSERT INTO categories (user_id, name, display_order)
+           VALUES ($1, $2, $3)`,
+          [userId, DEFAULT_CATEGORY_NAMES[i], i + 1]
+        );
+      }
 
       await client.query('COMMIT');
 

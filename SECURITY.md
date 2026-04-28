@@ -194,6 +194,39 @@ the bottom for what is still out of scope.
     (Net Position + grouped cards) and the transactions filter
     dropdown. Both halves of the join enforce `user_id` equality.
 
+## Categories — schema and ownership
+
+- **Table `categories(id, user_id, name, display_order)`** with
+  `UNIQUE(user_id, name)` (no name dupes per user) and
+  `UNIQUE(user_id, id)` (the second one exists solely so the FK below
+  can target it).
+- **Composite FK** `transactions.(user_id, category_id) →
+  categories.(user_id, id)` with `ON DELETE SET NULL`. Same pattern as
+  `accounts`: a transaction can never reference a category belonging to
+  a *different* user — even if buggy app code tries to set the wrong
+  `user_id`, Postgres rejects the write with an FK violation.
+- **Default-seeding on registration** is in the same DB transaction as
+  the user insert (`routes/auth.js`). If the 5 default categories
+  fail to insert, the whole registration rolls back — no orphan users
+  with zero categories.
+- **`category_source`** on `transactions` is a `CHECK`-bounded text
+  enum (`'plaid_mapped'` or `'user_override'`). On Plaid resync, rows
+  whose `category_source = 'user_override'` keep their `category_id`
+  untouched — only the display-side Plaid metadata is refreshed
+  (`plaid_category_primary`, `plaid_category_detailed`).
+- **Endpoints (auth-required, user-scoped):**
+  - `GET /api/categories` — lists the session user's categories with
+    current-month `transaction_count` and `current_month_spend`.
+  - `PATCH /api/categories/:id` — rename. Filters `WHERE id=$id AND
+    user_id=$session`; a cross-user attempt returns 404 (the canonical
+    "not yours" response, indistinguishable from "doesn't exist" so we
+    don't leak existence). Length 1–30, no per-user duplicates.
+  - `PATCH /api/transactions/:id/category` — reassign. Validates **both**
+    that the target category and the transaction belong to the session
+    user before writing. Sets `category_source = 'user_override'`. The
+    `apply_to_all_from_merchant` branch is `WHERE user_id = $session AND
+    merchant_name = $1` — never touches another user's rows.
+
 ## Invite-only registration
 
 - Registration requires a valid, **unused** invite code. 10 codes are

@@ -25,6 +25,12 @@
     ACCT_LOOKUP[a.id] = (a.name || 'Account') + (a.mask ? ' ····' + a.mask : '');
   });
 
+  // Categories list (loaded once, used to populate the reassign dropdown).
+  var CATEGORIES = [];
+  fetch('/api/categories', { credentials: 'same-origin' })
+    .then(function (r) { return r.ok ? r.json() : { categories: [] }; })
+    .then(function (j) { CATEGORIES = j.categories || []; });
+
   // ── state ─────────────────────────────────────────────────────────────
   var state = {
     page: 1,
@@ -48,6 +54,23 @@
   state.month = monthEl ? monthEl.value : '';
 
   // ── render ────────────────────────────────────────────────────────────
+  // Map MoneyMind category name → display_order (1..5) so we can colorize
+  // the badge consistently with the dashboard chart.
+  function colorClassForCategory(name) {
+    for (var i = 0; i < CATEGORIES.length; i++) {
+      if (CATEGORIES[i].name === name) return 'cat-color-' + CATEGORIES[i].display_order;
+    }
+    return 'cat-color-4'; // default to "Other" hue
+  }
+
+  function renderBadge(t) {
+    if (!t.category_id) return '<span class="cat-badge cat-badge-none">Uncategorized</span>';
+    var cls = colorClassForCategory(t.category_name) + (t.category_source === 'user_override' ? ' cat-override' : '');
+    return '<span class="cat-badge ' + cls + '" title="'
+      + (t.category_source === 'user_override' ? 'Manually set' : 'Auto-assigned')
+      + '">' + escapeHtml(t.category_name || '—') + '</span>';
+  }
+
   function renderRows(transactions) {
     if (transactions.length === 0) {
       tableEl.innerHTML = '<p class="empty">No transactions found. Try a different month or clear filters.</p>';
@@ -60,17 +83,120 @@
       var secondary = (t.merchant_name && t.name && t.merchant_name !== t.name) ? t.name : '';
       var pendingTag = t.pending ? ' <span class="txn-pending">Pending</span>' : '';
       var acctLabel = ACCT_LOOKUP[t.plaid_account_id] || '—';
-      return '<li class="txn txn-row">'
+      return '<li class="txn-grid" data-id="' + t.id + '" data-merchant="' + escapeHtml(t.merchant_name || '') + '">'
+        + '<button class="txn-expand" type="button" aria-label="Expand details">▸</button>'
         + '<span class="txn-date">' + escapeHtml(t.date || '') + '</span>'
         + '<span class="txn-name">'
         +   '<span class="txn-primary">' + escapeHtml(primary) + pendingTag + '</span>'
         + (secondary ? '<span class="txn-secondary">' + escapeHtml(secondary) + '</span>' : '')
         + '</span>'
+        + '<span class="txn-cat-cell">'
+        +   '<button type="button" class="cat-badge-button" aria-label="Reassign category">'
+        +     renderBadge(t)
+        +   '</button>'
+        + '</span>'
         + '<span class="txn-account">' + escapeHtml(acctLabel) + '</span>'
         + '<span class="txn-amount txn-' + sign + '">' + escapeHtml(formatUSD(n)) + '</span>'
+        + '<div class="txn-detail" hidden>'
+        +   '<div class="txn-detail-label">Plaid category</div>'
+        +   '<div class="txn-detail-value">'
+        +     escapeHtml(t.plaid_category_detailed || t.plaid_category_primary || '—')
+        +   '</div>'
+        + '</div>'
         + '</li>';
     }).join('') + '</ul>';
     tableEl.innerHTML = html;
+
+    // Wire row interactions
+    tableEl.querySelectorAll('.txn-grid').forEach(wireRow);
+  }
+
+  function wireRow(row) {
+    var expandBtn = row.querySelector('.txn-expand');
+    var detail = row.querySelector('.txn-detail');
+    expandBtn.addEventListener('click', function () {
+      var open = !detail.hidden;
+      detail.hidden = open;
+      expandBtn.textContent = open ? '▸' : '▾';
+    });
+    var catBtn = row.querySelector('.cat-badge-button');
+    catBtn.addEventListener('click', function (e) { openCategoryPicker(row, catBtn, e); });
+  }
+
+  function closeAnyPickers() {
+    document.querySelectorAll('.cat-picker').forEach(function (p) { p.remove(); });
+  }
+  document.addEventListener('click', function (e) {
+    // Close any open picker if clicking outside one.
+    if (!e.target.closest('.cat-picker') && !e.target.closest('.cat-badge-button')) {
+      closeAnyPickers();
+    }
+  });
+
+  function openCategoryPicker(row, anchor, evt) {
+    evt.stopPropagation();
+    closeAnyPickers();
+    var pick = document.createElement('div');
+    pick.className = 'cat-picker';
+    pick.innerHTML = CATEGORIES.map(function (c) {
+      return '<button type="button" class="cat-picker-option" data-id="' + c.id + '">'
+        + '<span class="cat-color cat-color-' + c.display_order + '" aria-hidden="true"></span>'
+        + escapeHtml(c.name)
+        + '</button>';
+    }).join('');
+    anchor.parentNode.appendChild(pick);
+    pick.querySelectorAll('.cat-picker-option').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var newCatId = parseInt(btn.dataset.id, 10);
+        var newCatName = btn.textContent.trim();
+        closeAnyPickers();
+        reassign(row, newCatId, newCatName);
+      });
+    });
+  }
+
+  async function reassign(row, categoryId, categoryName) {
+    var txnId = row.dataset.id;
+    var merchant = row.dataset.merchant || '';
+
+    // First, the single-transaction update.
+    try {
+      var r = await fetch('/api/transactions/' + encodeURIComponent(txnId) + '/category', {
+        method: 'PATCH',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ category_id: categoryId, apply_to_all_from_merchant: false }),
+      });
+      if (!r.ok) {
+        var j = await r.json().catch(function () { return {}; });
+        throw new Error(j.error || ('status ' + r.status));
+      }
+    } catch (e) {
+      errorEl.hidden = false;
+      errorEl.textContent = 'Reassign failed: ' + e.message;
+      return;
+    }
+
+    // If there's a merchant, ask whether to apply across the merchant.
+    if (merchant && merchant.length > 0) {
+      var apply = window.confirm('Apply "' + categoryName + '" to all transactions from "' + merchant + '"?');
+      if (apply) {
+        try {
+          await fetch('/api/transactions/' + encodeURIComponent(txnId) + '/category', {
+            method: 'PATCH',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ category_id: categoryId, apply_to_all_from_merchant: true }),
+          });
+        } catch (e) {
+          errorEl.hidden = false;
+          errorEl.textContent = 'Bulk apply failed: ' + e.message;
+        }
+      }
+    }
+    // Re-fetch the page to reflect changes (counts/badges).
+    load();
   }
 
   function renderPagination(page, perPage, total) {

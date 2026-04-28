@@ -5,6 +5,7 @@
 const { decrypt } = require('./crypto');
 const { plaidClient } = require('./plaid');
 const { pool } = require('../db');
+const { categoryFor, plaidPrimary, plaidDetailed } = require('./category-mapping');
 
 const MAX_PAGES_PER_ITEM = 50;        // sandbox & realistic prod fit easily
 const NOT_READY_RETRIES = 4;
@@ -75,14 +76,29 @@ async function syncOneItem(userId, item) {
   try {
     await client.query('BEGIN');
 
+    // Build a name→id lookup for THIS user's categories so we can resolve
+    // the mapping output to a category_id without a per-row query.
+    const { rows: catRows } = await client.query(
+      'SELECT id, name FROM categories WHERE user_id = $1', [userId]
+    );
+    const categoryIdByName = new Map();
+    for (const r of catRows) categoryIdByName.set(r.name, r.id);
+
+    function resolveCategory(plaidCategoryArr) {
+      const mmName = categoryFor(plaidCategoryArr);
+      return categoryIdByName.get(mmName) || null; // null if user has no "Other" yet
+    }
+
     for (const tx of added) {
       await client.query(
         `INSERT INTO transactions (
            user_id, plaid_item_id, plaid_account_id, plaid_transaction_id,
            name, merchant_name, amount, iso_currency_code,
-           date, authorized_date, category, category_id,
-           payment_channel, pending, location
-         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+           date, authorized_date, category, plaid_category_id,
+           payment_channel, pending, location,
+           category_id, category_source,
+           plaid_category_primary, plaid_category_detailed
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
          ON CONFLICT (user_id, plaid_transaction_id) DO NOTHING`,
         [
           userId,
@@ -100,28 +116,44 @@ async function syncOneItem(userId, item) {
           tx.payment_channel,
           tx.pending,
           tx.location ? JSON.stringify(tx.location) : null,
+          resolveCategory(tx.category),
+          'plaid_mapped',
+          plaidPrimary(tx.category),
+          plaidDetailed(tx.category),
         ]
       );
     }
 
+    // On UPDATE: refresh Plaid metadata always, but PRESERVE category_id
+    // when the user has manually overridden it.
+    //   - category_source = 'user_override' → leave category_id alone,
+    //     just update plaid_category_primary/detailed for display.
+    //   - otherwise → also update category_id and (re-)stamp it as
+    //     'plaid_mapped'.
     for (const tx of modified) {
       await client.query(
         `UPDATE transactions SET
-           plaid_item_id     = $2,
-           plaid_account_id  = $3,
-           name              = $4,
-           merchant_name     = $5,
-           amount            = $6,
-           iso_currency_code = $7,
-           date              = $8,
-           authorized_date   = $9,
-           category          = $10,
-           category_id       = $11,
-           payment_channel   = $12,
-           pending           = $13,
-           location          = $14,
-           updated_at        = NOW()
-         WHERE user_id = $1 AND plaid_transaction_id = $15`,
+           plaid_item_id           = $2,
+           plaid_account_id        = $3,
+           name                    = $4,
+           merchant_name           = $5,
+           amount                  = $6,
+           iso_currency_code       = $7,
+           date                    = $8,
+           authorized_date         = $9,
+           category                = $10,
+           plaid_category_id       = $11,
+           payment_channel         = $12,
+           pending                 = $13,
+           location                = $14,
+           plaid_category_primary  = $15,
+           plaid_category_detailed = $16,
+           category_id             = CASE WHEN category_source = 'user_override'
+                                          THEN category_id ELSE $17 END,
+           category_source         = CASE WHEN category_source = 'user_override'
+                                          THEN category_source ELSE 'plaid_mapped' END,
+           updated_at              = NOW()
+         WHERE user_id = $1 AND plaid_transaction_id = $18`,
         [
           userId,
           item.id,
@@ -137,6 +169,9 @@ async function syncOneItem(userId, item) {
           tx.payment_channel,
           tx.pending,
           tx.location ? JSON.stringify(tx.location) : null,
+          plaidPrimary(tx.category),
+          plaidDetailed(tx.category),
+          resolveCategory(tx.category),
           tx.transaction_id,
         ]
       );

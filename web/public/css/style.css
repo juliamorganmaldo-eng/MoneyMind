@@ -508,3 +508,205 @@ form input:focus {
   letter-spacing: .15em;
 }
 @keyframes pulse { 0%,100% { opacity: .3 } 50% { opacity: 1 } }
+
+/* ── Category palette (5 distinct, accessible-on-white hues) ───────────
+   Order matches the default display_order: 1 Eating Out, 2 Gas,
+   3 Groceries, 4 Other, 5 Shopping. The text-on-pill remains var(--ink)
+   so contrast stays > 4.5:1 against these soft fills. */
+.cat-color-1 { --cat-bg: #FED7D7; --cat-bd: #FEB2B2; --cat-fg: #9B2C2C; } /* coral */
+.cat-color-2 { --cat-bg: #FEEBC8; --cat-bd: #FBD38D; --cat-fg: #9C4221; } /* amber */
+.cat-color-3 { --cat-bg: #C6F6D5; --cat-bd: #9AE6B4; --cat-fg: #22543D; } /* leaf  */
+.cat-color-4 { --cat-bg: #E2E8F0; --cat-bd: #CBD5E0; --cat-fg: #2D3748; } /* slate */
+.cat-color-5 { --cat-bg: #E9D8FD; --cat-bd: #D6BCFA; --cat-fg: #44337A; } /* violet*/
+
+.cat-color {
+  display: inline-block;
+  width: 10px; height: 10px;
+  border-radius: 3px;
+  background: var(--cat-bg);
+  border: 1px solid var(--cat-bd);
+  margin-right: .5rem;
+  vertical-align: 1px;
+}
+.cat-fill-1 { background: #FC8181; }
+.cat-fill-2 { background: #F6AD55; }
+.cat-fill-3 { background: #68D391; }
+.cat-fill-4 { background: #A0AEC0; }
+.cat-fill-5 { background: #B794F4; }
+
+/* ── category badge on transaction rows ──────────────────────────────── */
+.cat-badge {
+  display: inline-block;
+  padding: .125rem .5rem;
+  font-size: .75rem;
+  font-weight: 600;
+  color: var(--cat-fg, var(--ink));
+  background: var(--cat-bg, var(--green-50));
+  border: 1px solid var(--cat-bd, var(--border));
+  border-radius: 9999px;
+  white-space: nowrap;
+}
+.cat-badge.cat-override::after {
+  content: '✱';
+  margin-left: .25rem;
+  opacity: .7;
+}
+.cat-badge-none {
+  --cat-bg: var(--white);
+  --cat-bd: var(--border);
+  --cat-fg: var(--muted);
+  font-style: italic;
+}
+.cat-badge-button {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+/* ── inline category picker (popover) ────────────────────────────────── */
+.txn-cat-cell { position: relative; }
+.cat-picker {
+  position: absolute;
+  top: 100%; left: 0;
+  z-index: 50;
+  margin-top: .25rem;
+  min-width: 180px;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg);
+  padding: .25rem;
+  display: flex;
+  flex-direction: column;
+}
+.cat-picker-option {
+  display: flex;
+  align-items: center;
+  gap: .25rem;
+  padding: .5rem .625rem;
+  font-size: .875rem;
+  font-family: inherit;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--ink);
+}
+.cat-picker-option:hover { background: var(--green-50); }
+
+/* ── transaction grid layout (now includes category column + expand) ─── */
+.txn-grid {
+  display: grid;
+  grid-template-columns: 24px 100px 1fr 130px 200px 110px;
+  gap: .75rem;
+  align-items: center;
+  padding: .75rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: .9375rem;
+}
+.txn-grid:last-child { border-bottom: 0; }
+.txn-grid > .txn-detail {
+  grid-column: 2 / -1;
+  padding: .5rem .75rem;
+  margin-top: .375rem;
+  background: var(--green-50);
+  border: 1px solid var(--green-100);
+  border-radius: var(--radius-sm);
+  font-size: .8125rem;
+  color: var(--ink-2);
+}
+.txn-detail-label { color: var(--muted); margin-bottom: .125rem; }
+.txn-expand {
+  background: none;
+  border: 0;
+  font-size: .75rem;
+  color: var(--muted);
+  cursor: pointer;
+  font-family: inherit;
+  padding: 0;
+}
+.txn-expand:hover { color: var(--green-800); }
+
+/* ── /categories page ────────────────────────────────────────────────── */
+.cat-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+.cat-row {
+  display: grid;
+  grid-template-columns: 24px 1fr 100px 120px;
+  gap: .75rem;
+  align-items: center;
+  padding: .875rem .25rem;
+  border-bottom: 1px solid var(--border);
+  font-size: .9375rem;
+}
+.cat-row:last-child { border-bottom: 0; }
+.cat-name {
+  cursor: text;
+  color: var(--ink);
+  font-weight: 600;
+  outline: none;
+  border-radius: 4px;
+  padding: .125rem .25rem;
+}
+.cat-name:hover { background: var(--green-50); }
+.cat-name:focus { box-shadow: 0 0 0 2px rgba(22, 101, 52, .2); }
+.cat-edit {
+  width: 100%;
+  padding: .375rem .5rem;
+  font-size: .9375rem;
+  font-family: inherit;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--white);
+  border: 1px solid var(--green-700);
+  border-radius: var(--radius-sm);
+  outline: none;
+}
+.cat-count { color: var(--muted); font-size: .8125rem; }
+.cat-total {
+  text-align: right;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--green-900);
+}
+
+/* ── dashboard spending chart ────────────────────────────────────────── */
+.spending-list { display: flex; flex-direction: column; gap: .625rem; }
+.spending-row {
+  display: grid;
+  grid-template-columns: 140px 1fr 100px;
+  align-items: center;
+  gap: .75rem;
+  font-size: .875rem;
+}
+.spending-name {
+  display: flex;
+  align-items: center;
+  color: var(--ink);
+  font-weight: 600;
+}
+.spending-bar {
+  display: block;
+  height: 12px;
+  background: var(--green-50);
+  border-radius: 9999px;
+  overflow: hidden;
+}
+.spending-fill {
+  display: block;
+  height: 100%;
+  border-radius: 9999px;
+  transition: width .3s ease;
+}
+.spending-amount {
+  text-align: right;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}

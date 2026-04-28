@@ -226,8 +226,9 @@
         if (c.modified_count) parts.push('updated ' + c.modified_count);
         if (c.removed_count)  parts.push('removed ' + c.removed_count);
         syncStatus.textContent = parts.join(', ') + '.';
-        // Refresh both panels — sync may have changed balances and transactions.
-        await Promise.all([loadAccounts(), loadRecent()]);
+        // Refresh all three — sync may have changed balances, transactions,
+        // and per-category totals.
+        await Promise.all([loadAccounts(), loadRecent(), loadSpending()]);
         // Bump the last-synced timestamp.
         var ls = document.getElementById('last-synced');
         if (ls) {
@@ -256,7 +257,45 @@
   // Refresh the relative time every 30s so "1 minute ago" doesn't go stale.
   setInterval(renderLastSynced, 30000);
 
+  // ── Spending This Month chart ────────────────────────────────────────
+  async function loadSpending() {
+    var chart = document.getElementById('spending-chart');
+    if (!chart) return;
+    try {
+      var r = await fetch('/api/categories', { credentials: 'same-origin' });
+      if (!r.ok) throw new Error('status ' + r.status);
+      var cats = (await r.json()).categories || [];
+      var max = 0;
+      for (var i = 0; i < cats.length; i++) {
+        var s = Number(cats[i].current_month_spend) || 0;
+        if (s > max) max = s;
+      }
+      if (max === 0) {
+        chart.className = 'empty';
+        chart.innerHTML = 'No spending recorded this month yet.';
+        return;
+      }
+      chart.className = '';
+      chart.innerHTML = '<div class="spending-list">' + cats.map(function (c) {
+        var spend = Number(c.current_month_spend) || 0;
+        var pct = max > 0 ? Math.round((spend / max) * 100) : 0;
+        return '<div class="spending-row">'
+          + '<span class="spending-name">'
+          +   '<span class="cat-color cat-color-' + c.display_order + '" aria-hidden="true"></span>'
+          +   escapeHtml(c.name)
+          + '</span>'
+          + '<span class="spending-bar"><span class="spending-fill cat-fill-' + c.display_order + '" style="width:' + pct + '%"></span></span>'
+          + '<span class="spending-amount">' + formatUSD(spend) + '</span>'
+          + '</div>';
+      }).join('') + '</div>';
+    } catch (e) {
+      chart.className = 'empty';
+      chart.innerHTML = 'Could not load spending breakdown.';
+    }
+  }
+
   // ── kick off initial loads ────────────────────────────────────────────
   if (document.getElementById('institutions-list')) loadAccounts();
   if (document.getElementById('txn-list')) loadRecent();
+  if (document.getElementById('spending-chart')) loadSpending();
 })();

@@ -1,0 +1,33 @@
+<%- include('partials/head', { title: 'Categories' }) %>
+<body class="app-body">
+  <header class="app-header">
+    <div class="brand">
+      <span class="brand-mark">◆</span>
+      <span class="brand-name">MoneyMind</span>
+    </div>
+    <div class="header-actions">
+      <a href="/dashboard" class="btn-ghost btn-inline">← Dashboard</a>
+      <a href="/transactions" class="btn-ghost btn-inline">Transactions</a>
+      <form method="POST" action="/logout" class="logout-form">
+        <button type="submit" class="btn-ghost">Log out</button>
+      </form>
+    </div>
+  </header>
+
+  <main class="app-main">
+    <h1 class="page-title">Categories</h1>
+    <p class="subtitle" style="margin-bottom: 1.25rem;">
+      Click any name to rename. Counts and totals are for the current month.
+    </p>
+
+    <section class="panel">
+      <div id="cat-error" class="alert alert-error" hidden></div>
+      <div id="cat-list">
+        <div class="empty"><span class="spinner-inline">…</span> Loading…</div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/js/categories.js"></script>
+</body>
+</html>

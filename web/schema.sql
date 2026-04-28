@@ -116,3 +116,68 @@ CREATE TABLE IF NOT EXISTS transactions (
 );
 CREATE INDEX IF NOT EXISTS idx_transactions_user_date ON transactions(user_id, date DESC);
 CREATE INDEX IF NOT EXISTS idx_transactions_plaid_item_id ON transactions(plaid_item_id);
+
+-- MoneyMind categories. 5 defaults seeded per user on registration.
+-- The composite UNIQUE(user_id, id) lets `transactions.category_id` use
+-- a (user_id, category_id) FK that guarantees a transaction can never
+-- reference another user's category at the schema level.
+CREATE TABLE IF NOT EXISTS categories (
+  id            SERIAL PRIMARY KEY,
+  user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name          TEXT NOT NULL,
+  display_order INTEGER NOT NULL,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT categories_user_name_unique UNIQUE (user_id, name),
+  CONSTRAINT categories_user_id_unique   UNIQUE (user_id, id)
+);
+CREATE INDEX IF NOT EXISTS idx_categories_user_id ON categories(user_id);
+
+-- Transaction → category resolution.
+-- The legacy `category_id` column was Plaid's text id (e.g. "12500000").
+-- Rename it to `plaid_category_id` so we can re-use `category_id` for the
+-- INTEGER FK to MoneyMind categories.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_name='transactions'
+       AND column_name='category_id'
+       AND data_type='text'
+  ) THEN
+    ALTER TABLE transactions RENAME COLUMN category_id TO plaid_category_id;
+  END IF;
+END$$;
+
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS category_id INTEGER;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS plaid_category_id TEXT;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS category_source TEXT;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS plaid_category_primary  TEXT;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS plaid_category_detailed TEXT;
+-- Reserved column for future merchant-rules feature. Not yet wired up.
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS merchant_rule_applied_id INTEGER;
+
+-- CHECK on category_source enum (idempotent — drop+add).
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'transactions_category_source_check') THEN
+    ALTER TABLE transactions
+      ADD CONSTRAINT transactions_category_source_check
+      CHECK (category_source IS NULL OR category_source IN ('plaid_mapped', 'user_override'));
+  END IF;
+END$$;
+
+-- Composite FK: transactions.(user_id, category_id) → categories.(user_id, id).
+-- Schema-level guarantee that a transaction cannot reference a category
+-- belonging to a different user, even if buggy app code tries to.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'transactions_category_user_fk') THEN
+    ALTER TABLE transactions
+      ADD CONSTRAINT transactions_category_user_fk
+      FOREIGN KEY (user_id, category_id)
+      REFERENCES categories(user_id, id) ON DELETE SET NULL;
+  END IF;
+END$$;
+
+CREATE INDEX IF NOT EXISTS idx_transactions_category_id ON transactions(category_id);
