@@ -115,7 +115,6 @@
 
   async function loadAccounts() {
     var instList = document.getElementById('institutions-list');
-    var netEl = document.getElementById('net-amount');
     if (!instList) return;
     try {
       var r = await fetch('/api/accounts', { credentials: 'same-origin' });
@@ -135,7 +134,6 @@
         groups.get(key).accts.push(a);
       }
 
-      // Render
       var html = '';
       for (var j = 0; j < groupOrder.length; j++) {
         var g = groups.get(groupOrder[j]);
@@ -145,22 +143,83 @@
           + '</div>';
       }
       instList.innerHTML = html || '<p class="empty">No accounts found.</p>';
-
-      // Net position
-      var net = 0;
-      for (var k = 0; k < accounts.length; k++) {
-        var bal = Number(accounts[k].current_balance);
-        if (!isFinite(bal)) continue;
-        if (ASSET_TYPES[accounts[k].type]) net += bal;
-        else if (LIAB_TYPES[accounts[k].type]) net -= bal;
-      }
-      netEl.textContent = formatUSD(net);
-      netEl.classList.remove('net-positive', 'net-negative');
-      netEl.classList.add(net >= 0 ? 'net-positive' : 'net-negative');
     } catch (e) {
       instList.innerHTML = '<p class="empty">Could not load accounts.</p>';
-      netEl.textContent = '—';
     }
+  }
+
+  // ── Net worth headline (replaces the old per-account sum) ────────────
+  function fmtCents(cents) {
+    if (cents == null) return '—';
+    return (Number(cents) / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+  }
+
+  async function loadNetWorth() {
+    var totalEl  = document.getElementById('nw-total');
+    var assetsEl = document.getElementById('nw-assets');
+    var liabsEl  = document.getElementById('nw-liabs');
+    if (!totalEl) return;
+    try {
+      var r = await fetch('/api/net-worth', { credentials: 'same-origin' });
+      if (!r.ok) throw new Error('status ' + r.status);
+      var j = await r.json();
+      totalEl.textContent = fmtCents(j.current_total_cents);
+      totalEl.classList.remove('net-positive', 'net-negative');
+      totalEl.classList.add(j.current_total_cents >= 0 ? 'net-positive' : 'net-negative');
+      assetsEl.textContent = fmtCents(j.assets_total_cents);
+      liabsEl.textContent  = fmtCents(j.liabilities_total_cents);
+    } catch (e) {
+      totalEl.textContent = '—';
+    }
+  }
+
+  async function loadMiniChart() {
+    var el = document.getElementById('nw-mini-chart');
+    if (!el) return;
+    try {
+      var r = await fetch('/api/net-worth/history?months=12', { credentials: 'same-origin' });
+      if (!r.ok) throw new Error('status ' + r.status);
+      var rows = (await r.json()).history || [];
+      if (rows.length < 2) {
+        el.innerHTML = '<div class="chart-meta">Need ≥ 2 daily snapshots for a trend line. Sync more often to build history.</div>';
+        return;
+      }
+      var W = 720, H = 80, P = 6;
+      var values = rows.map(function (r) { return Number(r.net_worth_cents || 0); });
+      var min = Math.min.apply(null, values);
+      var max = Math.max.apply(null, values);
+      if (min === max) { min -= 100; max += 100; }
+      var n = rows.length;
+      var pts = rows.map(function (r, i) {
+        var x = P + (i * (W - 2*P) / (n - 1));
+        var y = H - P - ((values[i] - min) / (max - min)) * (H - 2*P);
+        return x + ',' + y;
+      }).join(' ');
+      el.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" class="line-svg-mini">'
+        + '<polyline fill="none" stroke="#15803D" stroke-width="2" points="' + pts + '"/></svg>';
+    } catch (e) {
+      el.innerHTML = '';
+    }
+  }
+
+  // Refresh balances button on dashboard
+  var refreshBtn = document.getElementById('refresh-balances-btn');
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', async function () {
+      refreshBtn.disabled = true;
+      var prev = refreshBtn.textContent;
+      refreshBtn.textContent = 'Refreshing…';
+      try {
+        var r = await fetch('/api/balances/refresh', { method: 'POST', credentials: 'same-origin' });
+        if (!r.ok) throw new Error('status ' + r.status);
+        await Promise.all([loadAccounts(), loadNetWorth(), loadMiniChart()]);
+      } catch (e) {
+        // silently — the balances page has its own error UI
+      } finally {
+        refreshBtn.disabled = false;
+        refreshBtn.textContent = prev;
+      }
+    });
   }
 
   // ── Recent Transactions (10) ──────────────────────────────────────────
@@ -226,9 +285,10 @@
         if (c.modified_count) parts.push('updated ' + c.modified_count);
         if (c.removed_count)  parts.push('removed ' + c.removed_count);
         syncStatus.textContent = parts.join(', ') + '.';
-        // Refresh all three — sync may have changed balances, transactions,
-        // and per-category totals.
-        await Promise.all([loadAccounts(), loadRecent(), loadSpending()]);
+        // Refresh everything — sync may have changed balances, transactions,
+        // per-category totals, and net-worth headline.
+        await Promise.all([loadAccounts(), loadRecent(), loadSpending(),
+                           loadNetWorth(), loadMiniChart()]);
         // Bump the last-synced timestamp.
         var ls = document.getElementById('last-synced');
         if (ls) {
@@ -386,4 +446,6 @@
   if (document.getElementById('txn-list')) loadRecent();
   if (document.getElementById('spending-chart')) loadSpending();
   if (document.getElementById('alerts-panel')) loadAlerts();
+  if (document.getElementById('nw-total')) loadNetWorth();
+  if (document.getElementById('nw-mini-chart')) loadMiniChart();
 })();

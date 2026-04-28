@@ -237,6 +237,32 @@ async function syncTransactionsForUser(userId) {
     console.error('[recurring] post-sync detection failed:', err.message);
   }
 
+  // Snapshot today's balances. Uses accounts.current_balance (already
+  // updated during the most recent Plaid exchange/refresh). For fresher
+  // numbers, the user can hit POST /api/balances/refresh which calls
+  // Plaid's accountsBalanceGet directly. Same-day re-syncs overwrite via
+  // the UNIQUE(user_id, account_id, snapshot_date) ON CONFLICT path.
+  try {
+    await pool.query(
+      `INSERT INTO balance_snapshots
+         (user_id, account_id, snapshot_date,
+          balance_cents, available_balance_cents, iso_currency_code)
+       SELECT user_id, id, CURRENT_DATE,
+              CASE WHEN current_balance   IS NULL THEN NULL ELSE ROUND(current_balance   * 100)::int END,
+              CASE WHEN available_balance IS NULL THEN NULL ELSE ROUND(available_balance * 100)::int END,
+              iso_currency_code
+         FROM accounts
+        WHERE user_id = $1
+       ON CONFLICT (user_id, account_id, snapshot_date) DO UPDATE SET
+         balance_cents           = EXCLUDED.balance_cents,
+         available_balance_cents = EXCLUDED.available_balance_cents,
+         iso_currency_code       = EXCLUDED.iso_currency_code`,
+      [userId]
+    );
+  } catch (err) {
+    console.error('[balance-snapshot] post-sync failed:', err.message);
+  }
+
   return totals;
 }
 

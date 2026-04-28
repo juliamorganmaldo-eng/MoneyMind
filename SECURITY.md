@@ -312,6 +312,58 @@ the bottom for what is still out of scope.
   - `POST   /api/subscriptions/sync` — manual re-detect for the session
     user. Calls the same algorithm + persistence as the post-sync hook.
 
+## Net worth, balance snapshots, insights, user settings
+
+- **Tables.**
+  - `balance_snapshots(user_id, account_id, snapshot_date, balance_cents,
+    available_balance_cents, iso_currency_code)` — one row per (user,
+    account, day). UNIQUE(user_id, account_id, snapshot_date) plus a
+    composite FK `(user_id, account_id) → accounts(user_id, id)`. Last
+    write wins for same-day re-syncs.
+  - `accounts.is_asset_override BOOLEAN` (nullable) and
+    `accounts.excluded_from_net_worth BOOLEAN NOT NULL DEFAULT FALSE`
+    let the user override Plaid's classification or remove an account
+    from net-worth math entirely.
+  - `user_settings(user_id, savings_rate_target_pct)` — one row per
+    user, `UNIQUE(user_id)`, with `CHECK (target BETWEEN 0 AND 100)`.
+    Seeded on registration in the same DB transaction as the user.
+- **All money is INTEGER cents.** Balances stored as cents on
+  `balance_snapshots`. Net-worth math sums cents directly. Server-side
+  validation rejects floats and out-of-range values on every PATCH that
+  takes a numeric (`is_asset_override`, `excluded_from_net_worth`,
+  `savings_rate_target_pct`).
+- **Endpoints (all auth-required, all user-scoped):**
+  - `GET    /api/net-worth` — current totals + breakdown by account
+    type + per-account list. Filters `WHERE user_id = $1` on the
+    accounts query; classification computed in app code via
+    `lib/account-classification.js`.
+  - `GET    /api/net-worth/history?months=N` — time-series rebuilt
+    from `balance_snapshots` (carry-forward per account: each date
+    sums the latest snapshot ≤ date). Both the snapshot SELECT and
+    the accounts SELECT filter by user_id.
+  - `POST   /api/balances/refresh` — calls Plaid `accountsBalanceGet`
+    using a freshly-decrypted access token (held briefly, nulled after
+    each item). Updates `accounts.current_balance` and writes new
+    snapshot rows. The DB UPDATE matches by `(user_id, plaid_account_id)`
+    so an item from another user could never collide.
+  - `PATCH  /api/accounts/:id/classification` — validates input as
+    boolean-or-null for `is_asset_override`, boolean for
+    `excluded_from_net_worth`. The UPDATE WHERE filters by `user_id`
+    so a cross-user attempt returns 404.
+  - `GET    /api/spending/by-month?months=N` — aggregates via
+    `lib/transaction-flow.js` (income/spending/transfer/ignore). Single
+    SELECT with `WHERE user_id = $1`; bucketing in app code.
+  - `GET    /api/savings-rate?months=N` — same pattern. Returns
+    `savings_rate_pct = null` when income is 0 (never divides by zero).
+  - `GET    /api/user-settings`, `PATCH /api/user-settings` — single
+    row keyed by `user_id`. UPSERT; integer 0–100 validated at the
+    edge before any DB write (DB CHECK is the backstop).
+- **Sync hook.** After every successful `syncTransactionsForUser` (HTTP
+  or programmatic), the server upserts a `balance_snapshots` row per
+  account using the current `accounts.current_balance` value, scoped by
+  `user_id`. Wrapped in try/catch so a snapshot failure doesn't roll
+  back the source-of-truth transactions.
+
 ## Invite-only registration
 
 - Registration requires a valid, **unused** invite code. 10 codes are

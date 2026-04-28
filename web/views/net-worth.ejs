@@ -1,0 +1,62 @@
+<%- include('partials/head', { title: 'Net Worth' }) %>
+<body class="app-body">
+  <header class="app-header">
+    <div class="brand">
+      <span class="brand-mark">◆</span>
+      <span class="brand-name">MoneyMind</span>
+    </div>
+    <div class="header-actions">
+      <a href="/dashboard"     class="btn-ghost btn-inline">← Dashboard</a>
+      <a href="/transactions"  class="btn-ghost btn-inline">Transactions</a>
+      <a href="/categories"    class="btn-ghost btn-inline">Categories</a>
+      <a href="/budgets"       class="btn-ghost btn-inline">Budgets</a>
+      <a href="/subscriptions" class="btn-ghost btn-inline">Subscriptions</a>
+      <a href="/insights"      class="btn-ghost btn-inline">Insights</a>
+      <a href="/alerts"        class="btn-ghost btn-inline">Alerts</a>
+      <form method="POST" action="/logout" class="logout-form">
+        <button type="submit" class="btn-ghost">Log out</button>
+      </form>
+    </div>
+  </header>
+
+  <main class="app-main">
+    <div class="page-header-row">
+      <h1 class="page-title">Net Worth</h1>
+      <button id="refresh-btn" class="btn-ghost btn-inline" type="button">↻ Refresh balances</button>
+    </div>
+    <div id="nw-status" class="alert" hidden></div>
+
+    <section class="panel net-headline">
+      <div class="net-headline-row">
+        <div>
+          <div class="net-label">Net Worth</div>
+          <div id="nw-total" class="net-amount">—</div>
+        </div>
+        <div class="net-split">
+          <div><div class="net-label">Assets</div>
+               <div id="nw-assets" class="net-sub net-positive">—</div></div>
+          <div><div class="net-label">Liabilities</div>
+               <div id="nw-liabs" class="net-sub net-negative">—</div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2 class="panel-title">12-month history</h2>
+      <div id="nw-chart" class="nw-chart">
+        <div class="empty"><span class="spinner-inline">…</span> Loading…</div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2 class="panel-title">Account Classifications</h2>
+      <div id="nw-error" class="alert alert-error" hidden></div>
+      <div id="nw-accounts">
+        <div class="empty"><span class="spinner-inline">…</span> Loading…</div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/js/net-worth.js"></script>
+</body>
+</html>

@@ -9,8 +9,10 @@
       <a href="/transactions"  class="btn-ghost btn-inline">Transactions</a>
       <a href="/categories"    class="btn-ghost btn-inline">Categories</a>
       <a href="/budgets"       class="btn-ghost btn-inline">Budgets</a>
-      <a href="/alerts"        class="btn-ghost btn-inline">Alerts</a>
       <a href="/subscriptions" class="btn-ghost btn-inline">Subscriptions</a>
+      <a href="/net-worth"     class="btn-ghost btn-inline">Net Worth</a>
+      <a href="/insights"      class="btn-ghost btn-inline">Insights</a>
+      <a href="/alerts"        class="btn-ghost btn-inline">Alerts</a>
       <form method="POST" action="/logout" class="logout-form">
         <button type="submit" class="btn-ghost">Log out</button>
       </form>
@@ -38,11 +40,24 @@
     </section>
 
     <% if (items && items.length > 0) { %>
-      <section class="panel net-panel">
-        <div class="net-label">Total Net Position</div>
-        <div id="net-amount" class="net-amount">
-          <span class="spinner-inline" aria-label="loading">…</span>
+      <section class="panel net-headline">
+        <div class="net-headline-row">
+          <div>
+            <div class="net-label">Net Worth</div>
+            <div id="nw-total" class="net-amount">
+              <span class="spinner-inline" aria-label="loading">…</span>
+            </div>
+            <div class="net-sub-row">
+              <span class="net-sub-label">Assets</span> <span id="nw-assets" class="net-positive">—</span>
+              <span class="net-sub-label">·  Liabilities</span> <span id="nw-liabs" class="net-negative">—</span>
+            </div>
+          </div>
+          <div class="net-actions">
+            <button id="refresh-balances-btn" class="btn-ghost btn-inline" type="button">↻ Refresh balances</button>
+            <a href="/net-worth" class="btn-ghost btn-inline">Manage classifications →</a>
+          </div>
         </div>
+        <div id="nw-mini-chart" class="nw-chart-mini"></div>
       </section>
 
       <section class="panel">

@@ -944,3 +944,192 @@ form input:focus {
   color: var(--green-900);
   letter-spacing: .01em;
 }
+
+/* ── Net Worth headline / chart ───────────────────────────────────────── */
+.net-headline {
+  padding: 1.5rem 1.75rem;
+}
+.net-headline-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+.net-sub-row {
+  margin-top: .25rem;
+  font-size: .8125rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.net-sub-row .net-positive { color: var(--green-800); font-weight: 600; }
+.net-sub-row .net-negative { color: var(--danger);    font-weight: 600; }
+.net-sub-label { color: var(--muted); }
+.net-sub {
+  font-size: 1.125rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.net-split {
+  display: flex;
+  gap: 2rem;
+}
+.net-actions {
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+  align-items: flex-end;
+}
+
+.nw-chart-mini {
+  margin-top: .75rem;
+  height: 80px;
+}
+.line-svg-mini { width: 100%; height: 80px; display: block; }
+
+.nw-chart {
+  position: relative;
+  min-height: 220px;
+}
+.line-svg { width: 100%; height: 220px; display: block; }
+.line-svg circle { fill: var(--green-800); cursor: crosshair; }
+.line-svg circle:hover { fill: var(--green-900); r: 5; }
+.chart-meta {
+  display: flex;
+  gap: 1rem;
+  font-size: .75rem;
+  color: var(--muted);
+  margin-top: .375rem;
+  font-variant-numeric: tabular-nums;
+}
+.chart-tip {
+  position: absolute;
+  background: var(--ink);
+  color: var(--white);
+  font-size: .75rem;
+  padding: .25rem .5rem;
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* ── /net-worth account table ────────────────────────────────────────── */
+.acct-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .9375rem;
+}
+.acct-table th, .acct-table td {
+  text-align: left;
+  padding: .5rem .75rem;
+  border-bottom: 1px solid var(--border);
+}
+.acct-table th { font-size: .75rem; text-transform: uppercase; color: var(--muted); letter-spacing: .04em; font-weight: 700; }
+.acct-table td.num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+.acct-table td.mask { font-variant-numeric: tabular-nums; color: var(--muted); }
+.class-badge {
+  display: inline-block;
+  padding: .125rem .5rem;
+  font-size: .6875rem;
+  font-weight: 700;
+  border-radius: 9999px;
+  letter-spacing: .04em;
+}
+.class-badge.class-asset    { color: var(--green-800); background: var(--green-50); border: 1px solid var(--green-100); }
+.class-badge.class-liability { color: #9B2C2C; background: #FED7D7; border: 1px solid #FEB2B2; }
+.class-badge.class-excluded { color: var(--muted); background: var(--white); border: 1px solid var(--border); }
+.class-override {
+  font-size: .625rem;
+  color: var(--muted);
+  font-style: italic;
+  margin-left: .25rem;
+}
+.class-select {
+  padding: .25rem .375rem;
+  font-size: .8125rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: inherit;
+}
+
+/* ── /insights month-over-month ──────────────────────────────────────── */
+.mom-legend {
+  display: flex;
+  gap: 1.5rem;
+  font-size: .8125rem;
+  color: var(--muted);
+  margin-bottom: 1rem;
+}
+.mom-swatch {
+  display: inline-block;
+  width: 10px; height: 10px;
+  border-radius: 2px;
+  margin-right: .375rem;
+  vertical-align: 1px;
+}
+.mom-swatch.mom-prev { background: #A0AEC0; }
+.mom-swatch.mom-curr { background: var(--green-700); }
+.mom-rows { display: flex; flex-direction: column; gap: .75rem; }
+.mom-row {
+  display: grid;
+  grid-template-columns: 140px 1fr 160px;
+  align-items: center;
+  gap: 1rem;
+}
+.mom-name { font-weight: 600; color: var(--ink); font-size: .9375rem; }
+.mom-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.mom-bar { height: 10px; border-radius: 9999px; }
+.mom-bar.mom-prev { background: #A0AEC0; }
+.mom-bar.mom-curr { background: var(--green-700); }
+.mom-vals {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: .75rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.delta-list { list-style: none; display: flex; flex-direction: column; gap: .375rem; margin-top: 1rem; }
+.delta { font-size: .875rem; padding: .375rem .5rem; border-radius: var(--radius-sm); }
+.delta-more { background: #FED7D7; color: #9B2C2C; }
+.delta-less { background: var(--green-50); color: var(--green-900); }
+
+/* ── /insights savings rate ──────────────────────────────────────────── */
+.savings-headline {
+  display: flex;
+  gap: 2.5rem;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+.savings-current {
+  font-size: 2.5rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  margin-top: .25rem;
+}
+.savings-current.sr-on   { color: var(--green-800); }
+.savings-current.sr-near { color: #B7791F; }
+.savings-current.sr-off  { color: var(--danger); }
+.savings-current.sr-na   { color: var(--muted); }
+
+.savings-target-block { display: flex; flex-direction: column; gap: .25rem; }
+.savings-target-input { display: flex; gap: .5rem; align-items: center; }
+.savings-target-input input {
+  width: 80px;
+  padding: .375rem .5rem;
+  font-family: inherit;
+  font-size: .9375rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-variant-numeric: tabular-nums;
+}
+.savings-status { font-size: .8125rem; color: var(--muted); }
+
+.sr-chart { position: relative; min-height: 180px; }

@@ -273,3 +273,38 @@ CREATE TABLE IF NOT EXISTS recurring_charge_actions (
 );
 CREATE INDEX IF NOT EXISTS idx_recurring_charge_actions_user_id ON recurring_charge_actions(user_id);
 CREATE INDEX IF NOT EXISTS idx_recurring_charge_actions_charge_id ON recurring_charge_actions(recurring_charge_id);
+
+-- ── Net-worth additions: account classification overrides ─────────────
+ALTER TABLE accounts ADD COLUMN IF NOT EXISTS is_asset_override     BOOLEAN;
+ALTER TABLE accounts ADD COLUMN IF NOT EXISTS excluded_from_net_worth BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- ── balance_snapshots — one row per (user, account, day) ──────────────
+-- Composite FK on (user_id, account_id) — the same multi-tenant safety
+-- pattern used elsewhere. Latest write wins for same-day re-syncs.
+CREATE TABLE IF NOT EXISTS balance_snapshots (
+  id                       SERIAL PRIMARY KEY,
+  user_id                  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  account_id               INTEGER NOT NULL,
+  snapshot_date            DATE    NOT NULL,
+  balance_cents            INTEGER,
+  available_balance_cents  INTEGER,
+  iso_currency_code        TEXT,
+  created_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT balance_snapshots_user_acct_date_unique
+    UNIQUE (user_id, account_id, snapshot_date),
+  CONSTRAINT balance_snapshots_account_user_fk
+    FOREIGN KEY (user_id, account_id) REFERENCES accounts(user_id, id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_balance_snapshots_user_id ON balance_snapshots(user_id);
+CREATE INDEX IF NOT EXISTS idx_balance_snapshots_user_date ON balance_snapshots(user_id, snapshot_date DESC);
+
+-- ── user_settings — one row per user ──────────────────────────────────
+CREATE TABLE IF NOT EXISTS user_settings (
+  id                      SERIAL PRIMARY KEY,
+  user_id                 INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  savings_rate_target_pct INTEGER NOT NULL DEFAULT 20,
+  updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT user_settings_user_unique UNIQUE (user_id),
+  CONSTRAINT user_settings_target_pct_check CHECK (savings_rate_target_pct BETWEEN 0 AND 100)
+);
+CREATE INDEX IF NOT EXISTS idx_user_settings_user_id ON user_settings(user_id);

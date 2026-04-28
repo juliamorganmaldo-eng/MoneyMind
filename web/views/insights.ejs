@@ -1,0 +1,55 @@
+<%- include('partials/head', { title: 'Insights' }) %>
+<body class="app-body">
+  <header class="app-header">
+    <div class="brand">
+      <span class="brand-mark">◆</span>
+      <span class="brand-name">MoneyMind</span>
+    </div>
+    <div class="header-actions">
+      <a href="/dashboard"     class="btn-ghost btn-inline">← Dashboard</a>
+      <a href="/transactions"  class="btn-ghost btn-inline">Transactions</a>
+      <a href="/categories"    class="btn-ghost btn-inline">Categories</a>
+      <a href="/budgets"       class="btn-ghost btn-inline">Budgets</a>
+      <a href="/subscriptions" class="btn-ghost btn-inline">Subscriptions</a>
+      <a href="/net-worth"     class="btn-ghost btn-inline">Net Worth</a>
+      <a href="/alerts"        class="btn-ghost btn-inline">Alerts</a>
+      <form method="POST" action="/logout" class="logout-form">
+        <button type="submit" class="btn-ghost">Log out</button>
+      </form>
+    </div>
+  </header>
+
+  <main class="app-main">
+    <h1 class="page-title">Insights</h1>
+
+    <section class="panel">
+      <h2 class="panel-title">Month over Month — Spending by Category</h2>
+      <div id="mom-chart"><div class="empty"><span class="spinner-inline">…</span> Loading…</div></div>
+      <div id="mom-deltas"></div>
+    </section>
+
+    <section class="panel">
+      <h2 class="panel-title">Savings Rate</h2>
+      <div class="savings-headline">
+        <div>
+          <div class="net-label">This month</div>
+          <div id="sr-current" class="savings-current">—</div>
+        </div>
+        <div class="savings-target-block">
+          <label for="sr-target" class="net-label">Target (%)</label>
+          <div class="savings-target-input">
+            <input id="sr-target" type="number" min="0" max="100" step="1" value="20" />
+            <button id="sr-save" class="btn-ghost btn-inline" type="button">Save</button>
+          </div>
+          <div id="sr-status-msg" class="savings-status"></div>
+        </div>
+      </div>
+      <div id="sr-chart" class="sr-chart">
+        <div class="empty"><span class="spinner-inline">…</span> Loading…</div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/js/insights.js"></script>
+</body>
+</html>

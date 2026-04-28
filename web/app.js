@@ -17,6 +17,9 @@ const categoryRoutes = require('./routes/categories');
 const budgetRoutes = require('./routes/budgets');
 const alertRoutes = require('./routes/alerts');
 const subscriptionRoutes = require('./routes/subscriptions');
+const netWorthRoutes = require('./routes/net-worth');
+const insightsRoutes = require('./routes/insights');
+const userSettingsRoutes = require('./routes/user-settings');
 
 const PORT = Number(process.env.PORT) || 3001;
 const IS_PROD = process.env.NODE_ENV === 'production';
@@ -83,6 +86,9 @@ app.use(categoryRoutes);
 app.use(budgetRoutes);
 app.use(alertRoutes);
 app.use(subscriptionRoutes);
+app.use(netWorthRoutes);
+app.use(insightsRoutes);
+app.use(userSettingsRoutes);
 
 app.use((req, res) => {
   res.status(404).send('Not found');

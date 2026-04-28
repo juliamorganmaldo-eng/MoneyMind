@@ -137,6 +137,12 @@ router.post('/register', redirectIfAuthed, async (req, res, next) => {
         );
       }
 
+      // Seed user_settings (savings_rate_target_pct defaults to 20).
+      await client.query(
+        `INSERT INTO user_settings (user_id) VALUES ($1)`,
+        [userId]
+      );
+
       await client.query('COMMIT');
 
       await logInAs(req, userId);
