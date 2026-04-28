@@ -294,8 +294,73 @@
     }
   }
 
+  // ── Alerts panel (top-of-dashboard, hidden when nothing to show) ──────
+  function fmtUSDFromCents(cents) {
+    if (cents == null) return '';
+    return (Number(cents) / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+  }
+
+  async function loadAlerts() {
+    var panel = document.getElementById('alerts-panel');
+    var list = document.getElementById('alerts-panel-list');
+    if (!panel || !list) return;
+    var items = [];
+    // Run both fetches in parallel — independent and small.
+    try {
+      var both = await Promise.all([
+        fetch('/api/budget-limits',           { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : { budget_limits: [] }; }),
+        fetch('/api/low-balance-thresholds',  { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : { thresholds: [] }; }),
+      ]);
+      var budgets = both[0].budget_limits || [];
+      var thresholds = both[1].thresholds || [];
+
+      for (var i = 0; i < budgets.length; i++) {
+        var b = budgets[i];
+        if (b.status === 'warning' || b.status === 'over') {
+          items.push({
+            kind: 'budget',
+            severity: b.status,
+            text: escapeHtml(b.category_name) + ': ' + (b.pct_used != null ? b.pct_used + '%' : '—')
+                + ' of ' + fmtUSDFromCents(b.monthly_limit_cents) + ' budget'
+                + (b.status === 'over' ? ' (over)' : ''),
+            href: '/budgets',
+          });
+        }
+      }
+      for (var j = 0; j < thresholds.length; j++) {
+        var t = thresholds[j];
+        if (t.triggered) {
+          items.push({
+            kind: 'low-balance',
+            severity: 'warning',
+            text: escapeHtml(t.account_name) + (t.mask ? ' ····' + escapeHtml(t.mask) : '')
+                + ': ' + fmtUSDFromCents(t.current_balance_cents)
+                + ' (below ' + fmtUSDFromCents(t.threshold_cents) + ' threshold)',
+            href: '/alerts',
+          });
+        }
+      }
+    } catch (e) {
+      // Quiet on error — alerts panel just stays hidden.
+      return;
+    }
+
+    if (items.length === 0) {
+      panel.hidden = true;
+      return;
+    }
+    list.innerHTML = items.map(function (a) {
+      return '<li class="alert-item alert-' + a.severity + '">'
+        + '<span class="alert-icon">' + (a.severity === 'over' ? '🛑' : '⚠') + '</span> '
+        + a.text + ' <a class="alert-link" href="' + a.href + '">view →</a>'
+        + '</li>';
+    }).join('');
+    panel.hidden = false;
+  }
+
   // ── kick off initial loads ────────────────────────────────────────────
   if (document.getElementById('institutions-list')) loadAccounts();
   if (document.getElementById('txn-list')) loadRecent();
   if (document.getElementById('spending-chart')) loadSpending();
+  if (document.getElementById('alerts-panel')) loadAlerts();
 })();

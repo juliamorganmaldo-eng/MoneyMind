@@ -1,0 +1,34 @@
+<%- include('partials/head', { title: category.name + ' — Budget detail' }) %>
+<body class="app-body">
+  <header class="app-header">
+    <div class="brand">
+      <span class="brand-mark">◆</span>
+      <span class="brand-name">MoneyMind</span>
+    </div>
+    <div class="header-actions">
+      <a href="/budgets" class="btn-ghost btn-inline">← Budgets</a>
+      <a href="/dashboard" class="btn-ghost btn-inline">Dashboard</a>
+      <form method="POST" action="/logout" class="logout-form">
+        <button type="submit" class="btn-ghost">Log out</button>
+      </form>
+    </div>
+  </header>
+
+  <main class="app-main">
+    <h1 class="page-title"><%= category.name %> — this month</h1>
+
+    <section class="panel">
+      <div id="bd-error" class="alert alert-error" hidden></div>
+      <div id="bd-info" class="txn-info"></div>
+      <div id="bd-list">
+        <div class="empty"><span class="spinner-inline">…</span> Loading…</div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    window.__moneymind_category = { id: <%= category.id %>, name: <%- JSON.stringify(category.name) %> };
+  </script>
+  <script src="/js/budgets-detail.js"></script>
+</body>
+</html>

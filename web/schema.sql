@@ -181,3 +181,44 @@ BEGIN
 END$$;
 
 CREATE INDEX IF NOT EXISTS idx_transactions_category_id ON transactions(category_id);
+
+-- accounts already has UNIQUE(user_id, plaid_account_id). Add UNIQUE(user_id, id)
+-- so other tables can FK on the composite (user_id, account_id) — same
+-- multi-tenant pattern as transactions → categories.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'accounts_user_id_id_key') THEN
+    ALTER TABLE accounts ADD CONSTRAINT accounts_user_id_id_key UNIQUE (user_id, id);
+  END IF;
+END$$;
+
+-- ── Budget limits (one per user/category, money in INTEGER cents) ──────
+CREATE TABLE IF NOT EXISTS budget_limits (
+  id                  SERIAL PRIMARY KEY,
+  user_id             INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  category_id         INTEGER NOT NULL,
+  monthly_limit_cents INTEGER NOT NULL,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT budget_limits_positive_check    CHECK (monthly_limit_cents > 0),
+  CONSTRAINT budget_limits_user_cat_unique   UNIQUE (user_id, category_id),
+  CONSTRAINT budget_limits_category_user_fk
+    FOREIGN KEY (user_id, category_id) REFERENCES categories(user_id, id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_budget_limits_user_id ON budget_limits(user_id);
+
+-- ── Low-balance thresholds (one per user/account, INTEGER cents) ──────
+CREATE TABLE IF NOT EXISTS low_balance_thresholds (
+  id              SERIAL PRIMARY KEY,
+  user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  account_id      INTEGER NOT NULL,
+  threshold_cents INTEGER NOT NULL,
+  enabled         BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT low_balance_nonneg_check       CHECK (threshold_cents >= 0),
+  CONSTRAINT low_balance_user_account_unique UNIQUE (user_id, account_id),
+  CONSTRAINT low_balance_account_user_fk
+    FOREIGN KEY (user_id, account_id) REFERENCES accounts(user_id, id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_low_balance_user_id ON low_balance_thresholds(user_id);

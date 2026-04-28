@@ -5,12 +5,24 @@
       <span class="brand-mark">◆</span>
       <span class="brand-name">MoneyMind</span>
     </div>
-    <form method="POST" action="/logout" class="logout-form">
-      <button type="submit" class="btn-ghost">Log out</button>
-    </form>
+    <div class="header-actions">
+      <a href="/transactions" class="btn-ghost btn-inline">Transactions</a>
+      <a href="/categories"   class="btn-ghost btn-inline">Categories</a>
+      <a href="/budgets"      class="btn-ghost btn-inline">Budgets</a>
+      <a href="/alerts"       class="btn-ghost btn-inline">Alerts</a>
+      <form method="POST" action="/logout" class="logout-form">
+        <button type="submit" class="btn-ghost">Log out</button>
+      </form>
+    </div>
   </header>
 
   <main class="app-main">
+    <%# Alerts panel — only rendered if there's something to show. JS sets hidden=false. %>
+    <section id="alerts-panel" class="panel alerts-panel" hidden>
+      <h2 class="panel-title">⚠ Alerts</h2>
+      <ul id="alerts-panel-list"></ul>
+    </section>
+
     <section class="panel">
       <div class="panel-header">
         <div>

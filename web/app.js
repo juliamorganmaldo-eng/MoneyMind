@@ -14,6 +14,8 @@ const plaidRoutes = require('./routes/plaid');
 const transactionRoutes = require('./routes/transactions');
 const accountRoutes = require('./routes/accounts');
 const categoryRoutes = require('./routes/categories');
+const budgetRoutes = require('./routes/budgets');
+const alertRoutes = require('./routes/alerts');
 
 const PORT = Number(process.env.PORT) || 3001;
 const IS_PROD = process.env.NODE_ENV === 'production';
@@ -77,6 +79,8 @@ app.use(plaidRoutes);
 app.use(transactionRoutes);
 app.use(accountRoutes);
 app.use(categoryRoutes);
+app.use(budgetRoutes);
+app.use(alertRoutes);
 
 app.use((req, res) => {
   res.status(404).send('Not found');

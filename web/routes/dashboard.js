@@ -106,4 +106,31 @@ router.get('/categories', requireAuth, (req, res) => {
   res.render('categories');
 });
 
+router.get('/budgets', requireAuth, (req, res) => {
+  res.render('budgets');
+});
+
+router.get('/budgets/:category_id', requireAuth, async (req, res, next) => {
+  try {
+    const userId = req.session.userId;
+    const categoryId = Number.parseInt(req.params.category_id, 10);
+    if (!Number.isFinite(categoryId)) return res.status(404).send('Not found');
+
+    // Render the page only if the category belongs to this user — the
+    // server-rendered <h1> would otherwise leak existence/name.
+    const { rows } = await pool.query(
+      'SELECT id, name FROM categories WHERE id = $1 AND user_id = $2',
+      [categoryId, userId]
+    );
+    if (rows.length === 0) return res.status(404).send('Not found');
+    res.render('budgets-detail', { category: rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/alerts', requireAuth, (req, res) => {
+  res.render('alerts');
+});
+
 module.exports = router;

@@ -1,0 +1,35 @@
+<%- include('partials/head', { title: 'Budgets' }) %>
+<body class="app-body">
+  <header class="app-header">
+    <div class="brand">
+      <span class="brand-mark">◆</span>
+      <span class="brand-name">MoneyMind</span>
+    </div>
+    <div class="header-actions">
+      <a href="/dashboard" class="btn-ghost btn-inline">← Dashboard</a>
+      <a href="/transactions" class="btn-ghost btn-inline">Transactions</a>
+      <a href="/categories" class="btn-ghost btn-inline">Categories</a>
+      <a href="/alerts" class="btn-ghost btn-inline">Alerts</a>
+      <form method="POST" action="/logout" class="logout-form">
+        <button type="submit" class="btn-ghost">Log out</button>
+      </form>
+    </div>
+  </header>
+
+  <main class="app-main">
+    <h1 class="page-title">Budgets</h1>
+    <p class="subtitle" style="margin-bottom: 1.25rem;">
+      Set a monthly limit for each category. Hit 80% to get a warning, 100% means over.
+    </p>
+
+    <section class="panel">
+      <div id="budgets-error" class="alert alert-error" hidden></div>
+      <div id="budgets-list">
+        <div class="empty"><span class="spinner-inline">…</span> Loading…</div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/js/budgets.js"></script>
+</body>
+</html>

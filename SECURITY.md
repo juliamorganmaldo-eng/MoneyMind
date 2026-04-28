@@ -227,6 +227,45 @@ the bottom for what is still out of scope.
     `apply_to_all_from_merchant` branch is `WHERE user_id = $session AND
     merchant_name = $1` — never touches another user's rows.
 
+## Budget limits + low-balance thresholds — money is integer cents
+
+- **Tables.** `budget_limits(user_id, category_id, monthly_limit_cents,
+  ...)` and `low_balance_thresholds(user_id, account_id, threshold_cents,
+  enabled, ...)`. Both have `UNIQUE(user_id, X)` so each user has at
+  most one limit per category and one threshold per account.
+- **Composite FKs (schema-level multi-tenant guarantee, same pattern as
+  `transactions`):**
+  - `budget_limits.(user_id, category_id) → categories.(user_id, id)`
+  - `low_balance_thresholds.(user_id, account_id) → accounts.(user_id, id)`
+  - To enable the latter we added `UNIQUE(user_id, id)` to `accounts`.
+  Result: a budget limit can never reference a category from another
+  user, and a threshold can never reference another user's account —
+  the database itself rejects such writes, even if buggy app code tries.
+- **All money is INTEGER cents.** `monthly_limit_cents` is `INTEGER` with
+  `CHECK > 0`; `threshold_cents` is `INTEGER` with `CHECK >= 0`. We
+  never store floating-point money. The transactions table's
+  `amount NUMERIC(14,2)` is converted on the SQL side via
+  `ROUND(amount * 100)::int` — exact arithmetic, no float involved.
+- **API input validation.** Every body field that should be a count of
+  cents is checked with `Number.isInteger()` — which strictly rejects
+  `300.5`, `'300'`, `NaN`, `null`, `Infinity`, etc. Negative values are
+  rejected at the same boundary. Malformed input → HTTP 400 with no DB
+  side effects. This is the single source of truth for input shape;
+  the DB CHECKs are a backstop, not the only line of defense.
+- **Endpoints (auth-required, user-scoped, ownership-validated):**
+  - `GET    /api/budget-limits` — list with current-month spend, pct, status.
+  - `PUT    /api/budget-limits/:category_id` — upsert (or DELETE on 0/null).
+    Validates category ownership; returns 404 cross-user.
+  - `GET    /api/budget-limits/:category_id/transactions` — drill-down.
+    Validates category ownership; returns 404 cross-user.
+  - `GET    /api/low-balance-thresholds` — list with current balances.
+  - `PUT    /api/low-balance-thresholds/:account_id` — upsert. Validates
+    account ownership; returns 404 cross-user.
+  - `DELETE /api/low-balance-thresholds/:account_id` — delete. The
+    `WHERE user_id=$session AND account_id=$1` filter guarantees a
+    cross-user attempt deletes nothing and the response is 404 (no
+    "deleted=0" leak).
+
 ## Invite-only registration
 
 - Registration requires a valid, **unused** invite code. 10 codes are
