@@ -133,4 +133,24 @@ router.get('/alerts', requireAuth, (req, res) => {
   res.render('alerts');
 });
 
+router.get('/subscriptions', requireAuth, (req, res) => {
+  res.render('subscriptions');
+});
+
+router.get('/subscriptions/:id', requireAuth, async (req, res, next) => {
+  try {
+    const userId = req.session.userId;
+    const id = Number.parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) return res.status(404).send('Not found');
+    const { rows } = await pool.query(
+      'SELECT id, display_name FROM recurring_charges WHERE id = $1 AND user_id = $2',
+      [id, userId]
+    );
+    if (rows.length === 0) return res.status(404).send('Not found');
+    res.render('subscription-detail', { subscription: rows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

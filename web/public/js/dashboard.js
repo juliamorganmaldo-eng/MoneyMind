@@ -307,12 +307,14 @@
     var items = [];
     // Run both fetches in parallel — independent and small.
     try {
-      var both = await Promise.all([
-        fetch('/api/budget-limits',           { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : { budget_limits: [] }; }),
-        fetch('/api/low-balance-thresholds',  { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : { thresholds: [] }; }),
+      var three = await Promise.all([
+        fetch('/api/budget-limits',          { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : { budget_limits: [] }; }),
+        fetch('/api/low-balance-thresholds', { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : { thresholds: [] }; }),
+        fetch('/api/subscriptions',          { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : { subscriptions: [] }; }),
       ]);
-      var budgets = both[0].budget_limits || [];
-      var thresholds = both[1].thresholds || [];
+      var budgets = three[0].budget_limits || [];
+      var thresholds = three[1].thresholds || [];
+      var subs = three[2].subscriptions || [];
 
       for (var i = 0; i < budgets.length; i++) {
         var b = budgets[i];
@@ -339,6 +341,27 @@
             href: '/alerts',
           });
         }
+      }
+
+      // Price-change alert: count active recurring charges where
+      // price_change_detected=true AND the row was updated in the last 30 days.
+      var THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+      var nowMs = Date.now();
+      var priceChangeCount = 0;
+      for (var k = 0; k < subs.length; k++) {
+        var s = subs[k];
+        if (s.status !== 'active' || !s.price_change_detected) continue;
+        if (!s.updated_at) continue;
+        if (nowMs - Date.parse(s.updated_at) <= THIRTY_DAYS_MS) priceChangeCount++;
+      }
+      if (priceChangeCount > 0) {
+        items.push({
+          kind: 'price-change',
+          severity: 'warning',
+          text: priceChangeCount + ' price change' + (priceChangeCount === 1 ? '' : 's')
+              + ' detected this month',
+          href: '/subscriptions',
+        });
       }
     } catch (e) {
       // Quiet on error — alerts panel just stays hidden.

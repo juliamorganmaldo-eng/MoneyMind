@@ -222,3 +222,54 @@ CREATE TABLE IF NOT EXISTS low_balance_thresholds (
     FOREIGN KEY (user_id, account_id) REFERENCES accounts(user_id, id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_low_balance_user_id ON low_balance_thresholds(user_id);
+
+-- ── Recurring charges (subscription audit) ─────────────────────────────
+-- One canonical row per (user, merchant_key). is_user_dismissed is set
+-- when the user marks "not recurring", and detection sync then leaves
+-- this row strictly alone — schema doesn't enforce that, the persistence
+-- layer does. UNIQUE(user_id, id) lets recurring_charge_actions FK
+-- composite, mirroring the per-user-isolation pattern used everywhere.
+CREATE TABLE IF NOT EXISTS recurring_charges (
+  id                    SERIAL PRIMARY KEY,
+  user_id               INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  merchant_key          TEXT    NOT NULL,
+  display_name          TEXT    NOT NULL,
+  category_id           INTEGER,
+  cadence               TEXT    NOT NULL,
+  median_amount_cents   INTEGER NOT NULL,
+  last_amount_cents     INTEGER NOT NULL,
+  last_charged_date     DATE,
+  next_expected_date    DATE,
+  occurrence_count      INTEGER NOT NULL,
+  confidence_score      INTEGER NOT NULL,
+  status                TEXT    NOT NULL,
+  price_change_detected BOOLEAN NOT NULL DEFAULT FALSE,
+  is_user_dismissed     BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT recurring_charges_cadence_check
+    CHECK (cadence IN ('weekly','biweekly','monthly','quarterly','annual')),
+  CONSTRAINT recurring_charges_status_check
+    CHECK (status IN ('active','ended','user_dismissed')),
+  CONSTRAINT recurring_charges_user_merchant_unique UNIQUE (user_id, merchant_key),
+  CONSTRAINT recurring_charges_user_id_unique       UNIQUE (user_id, id),
+  CONSTRAINT recurring_charges_category_user_fk
+    FOREIGN KEY (user_id, category_id) REFERENCES categories(user_id, id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_recurring_charges_user_id ON recurring_charges(user_id);
+
+CREATE TABLE IF NOT EXISTS recurring_charge_actions (
+  id                  SERIAL PRIMARY KEY,
+  user_id             INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  recurring_charge_id INTEGER NOT NULL,
+  action              TEXT    NOT NULL,
+  notes               TEXT,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT recurring_charge_actions_action_check
+    CHECK (action IN ('not_recurring','cancelled','reminder_set')),
+  CONSTRAINT recurring_charge_actions_user_charge_fk
+    FOREIGN KEY (user_id, recurring_charge_id)
+    REFERENCES recurring_charges(user_id, id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_recurring_charge_actions_user_id ON recurring_charge_actions(user_id);
+CREATE INDEX IF NOT EXISTS idx_recurring_charge_actions_charge_id ON recurring_charge_actions(recurring_charge_id);

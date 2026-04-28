@@ -224,6 +224,19 @@ async function syncTransactionsForUser(userId) {
       console.error('[txn-sync] item failed', { item_id: item.item_id, err: safePlaidError(err) });
     }
   }
+
+  // Refresh recurring-charge detection. Wrapped so a detection failure
+  // never kicks back to the caller as a sync failure — the source-of-
+  // truth transactions are already saved.
+  try {
+    const { detectRecurring } = require('./recurring-detection');
+    const { syncDetectionResults } = require('./recurring-persistence');
+    const detected = await detectRecurring(userId);
+    await syncDetectionResults(userId, detected);
+  } catch (err) {
+    console.error('[recurring] post-sync detection failed:', err.message);
+  }
+
   return totals;
 }
 

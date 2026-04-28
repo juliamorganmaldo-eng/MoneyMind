@@ -266,6 +266,52 @@ the bottom for what is still out of scope.
     cross-user attempt deletes nothing and the response is 404 (no
     "deleted=0" leak).
 
+## Subscription audit (recurring detection)
+
+- **Tables.** `recurring_charges(user_id, merchant_key, display_name,
+  category_id, cadence, …)` and `recurring_charge_actions(user_id,
+  recurring_charge_id, action, notes)`. Same composite-FK pattern as
+  the rest of the app: `recurring_charges.(user_id, category_id) →
+  categories.(user_id, id)`, and
+  `recurring_charge_actions.(user_id, recurring_charge_id) →
+  recurring_charges.(user_id, id)` (we added `UNIQUE(user_id, id)` to
+  `recurring_charges` for this). A row in either child table can never
+  reference a parent belonging to a different user — the database
+  rejects such writes.
+- **Detection algorithm.** `lib/recurring-detection.js`. The pure
+  function `detectFromTransactions(txns, today)` is unit-tested with
+  zero DB dependencies; the wrapper `detectRecurring(userId)` queries
+  the user's last 18 months of positive-amount transactions, scoped
+  by `WHERE user_id = $1`, excluding Plaid `Transfer/Payment/Income`
+  primary categories. Status enum is bounded by a CHECK constraint.
+- **Persistence.** `lib/recurring-persistence.js` upserts detected rows
+  per user and marks no-longer-detected rows as `'ended'`. **It never
+  modifies rows where `is_user_dismissed = TRUE`**, even on the UPSERT
+  path (the `ON CONFLICT … WHERE` clause re-asserts that). The dismiss
+  decision is durable across resyncs.
+- **Hook into transactions sync.** After `syncTransactionsForUser`
+  finishes its main loop, it calls `detectRecurring + syncDetectionResults`
+  inside a `try/catch` — a detection failure logs but does not roll back
+  the (already-saved) transactions.
+- **Endpoints (auth-required, user-scoped, ownership-validated):**
+  - `GET    /api/subscriptions` — list active + ended for this user;
+    response includes `annual_total_cents` aggregate.
+  - `GET    /api/subscriptions/:id` — drill-down. Validates ownership;
+    404 cross-user. The transactions returned are filtered by the
+    same merchant-key clustering function used in detection, so the
+    drill-down is exactly the rows that fed the cluster.
+  - `POST   /api/subscriptions/:id/action` — record `not_recurring`,
+    `cancelled`, or `reminder_set`. Validates `action` against an
+    allow-list (no free-form values reach SQL); validates ownership;
+    404 cross-user. Writes the action row + (depending on action)
+    updates the recurring_charges row in a single transaction.
+  - `GET    /api/subscriptions/duplicates` — pairs detected via
+    `lib/duplicate-detection.js`. The query that builds the pair
+    candidates is `WHERE user_id = $1` — never returns another user's
+    charges.
+  - `POST   /api/subscriptions/sync` — manual re-detect for the session
+    user. Calls the same algorithm + persistence as the post-sync hook.
+
 ## Invite-only registration
 
 - Registration requires a valid, **unused** invite code. 10 codes are

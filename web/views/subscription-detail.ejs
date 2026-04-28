@@ -1,0 +1,34 @@
+<%- include('partials/head', { title: subscription.display_name + ' — Subscription' }) %>
+<body class="app-body">
+  <header class="app-header">
+    <div class="brand">
+      <span class="brand-mark">◆</span>
+      <span class="brand-name">MoneyMind</span>
+    </div>
+    <div class="header-actions">
+      <a href="/subscriptions" class="btn-ghost btn-inline">← Subscriptions</a>
+      <a href="/dashboard"     class="btn-ghost btn-inline">Dashboard</a>
+      <form method="POST" action="/logout" class="logout-form">
+        <button type="submit" class="btn-ghost">Log out</button>
+      </form>
+    </div>
+  </header>
+
+  <main class="app-main">
+    <h1 class="page-title"><%= subscription.display_name %> — contributing transactions</h1>
+
+    <section class="panel">
+      <div id="sd-info" class="txn-info"></div>
+      <div id="sd-error" class="alert alert-error" hidden></div>
+      <div id="sd-list">
+        <div class="empty"><span class="spinner-inline">…</span> Loading…</div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    window.__moneymind_subscription = { id: <%= subscription.id %>, name: <%- JSON.stringify(subscription.display_name) %> };
+  </script>
+  <script src="/js/subscription-detail.js"></script>
+</body>
+</html>
