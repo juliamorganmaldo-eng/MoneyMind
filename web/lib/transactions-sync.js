@@ -237,6 +237,15 @@ async function syncTransactionsForUser(userId) {
     console.error('[recurring] post-sync detection failed:', err.message);
   }
 
+  // Run the findings orchestrator. Wrapped — a detector failure should
+  // never roll back the (already-saved) sync result.
+  try {
+    const { runDetectors } = require('./findings/orchestrator');
+    await runDetectors(userId);
+  } catch (err) {
+    console.error('[findings] post-sync orchestrator failed:', err.message);
+  }
+
   // Snapshot today's balances. Uses accounts.current_balance (already
   // updated during the most recent Plaid exchange/refresh). For fresher
   // numbers, the user can hit POST /api/balances/refresh which calls

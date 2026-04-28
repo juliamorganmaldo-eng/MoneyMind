@@ -308,3 +308,36 @@ CREATE TABLE IF NOT EXISTS user_settings (
   CONSTRAINT user_settings_target_pct_check CHECK (savings_rate_target_pct BETWEEN 0 AND 100)
 );
 CREATE INDEX IF NOT EXISTS idx_user_settings_user_id ON user_settings(user_id);
+
+-- Track when the user last opened /findings, for the "X new since last visit" badge.
+ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS last_findings_view_at TIMESTAMPTZ;
+
+-- ── findings — synthesized signals shown in the Findings Feed ─────────
+-- UNIQUE NULLS NOT DISTINCT (Postgres 15+) makes the constraint treat
+-- NULL related_entity_* and NULL occurred_at fields as equal — so a
+-- finding like "savings_rate_dropped this month" with no entity id can
+-- still be deduplicated by re-runs.
+CREATE TABLE IF NOT EXISTS findings (
+  id                    SERIAL PRIMARY KEY,
+  user_id               INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  finding_type          TEXT    NOT NULL,
+  tier                  TEXT    NOT NULL,
+  title                 TEXT    NOT NULL,
+  body                  TEXT    NOT NULL,
+  related_entity_type   TEXT,
+  related_entity_id     INTEGER,
+  deep_link_path        TEXT,
+  money_at_stake_cents  INTEGER,
+  occurred_at           TIMESTAMPTZ NOT NULL,
+  is_dismissed          BOOLEAN NOT NULL DEFAULT FALSE,
+  dismissed_at          TIMESTAMPTZ,
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT findings_tier_check
+    CHECK (tier IN ('critical', 'important', 'tip', 'positive')),
+  CONSTRAINT findings_unique_event
+    UNIQUE NULLS NOT DISTINCT (user_id, finding_type, related_entity_type, related_entity_id, occurred_at)
+);
+CREATE INDEX IF NOT EXISTS idx_findings_primary
+  ON findings(user_id, is_dismissed, tier, occurred_at DESC);
+CREATE INDEX IF NOT EXISTS idx_findings_user_id ON findings(user_id);

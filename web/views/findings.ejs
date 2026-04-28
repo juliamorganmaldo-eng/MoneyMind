@@ -1,0 +1,42 @@
+<%- include('partials/head', { title: 'Findings' }) %>
+<body class="app-body">
+  <header class="app-header">
+    <div class="brand">
+      <span class="brand-mark">◆</span>
+      <span class="brand-name">MoneyMind</span>
+    </div>
+    <div class="header-actions">
+      <a href="/dashboard"     class="btn-ghost btn-inline">← Dashboard</a>
+      <a href="/transactions"  class="btn-ghost btn-inline">Transactions</a>
+      <a href="/categories"    class="btn-ghost btn-inline">Categories</a>
+      <a href="/budgets"       class="btn-ghost btn-inline">Budgets</a>
+      <a href="/subscriptions" class="btn-ghost btn-inline">Subscriptions</a>
+      <a href="/net-worth"     class="btn-ghost btn-inline">Net Worth</a>
+      <a href="/insights"      class="btn-ghost btn-inline">Insights</a>
+      <a href="/alerts"        class="btn-ghost btn-inline">Alerts</a>
+      <form method="POST" action="/logout" class="logout-form">
+        <button type="submit" class="btn-ghost">Log out</button>
+      </form>
+    </div>
+  </header>
+
+  <main class="app-main">
+    <div class="page-header-row">
+      <div>
+        <h1 class="page-title">Findings</h1>
+        <p class="subtitle" id="findings-subtitle"></p>
+      </div>
+      <button id="refresh-btn" class="btn-ghost btn-inline" type="button">↻ Refresh</button>
+    </div>
+    <div id="f-status" class="alert" hidden></div>
+
+    <div id="f-sections">
+      <div class="empty"><span class="spinner-inline">…</span> Loading…</div>
+    </div>
+
+    <button id="show-dismissed" class="btn-ghost btn-inline" type="button" hidden>Show dismissed</button>
+  </main>
+
+  <script src="/js/findings.js"></script>
+</body>
+</html>

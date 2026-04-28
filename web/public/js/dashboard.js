@@ -286,9 +286,9 @@
         if (c.removed_count)  parts.push('removed ' + c.removed_count);
         syncStatus.textContent = parts.join(', ') + '.';
         // Refresh everything — sync may have changed balances, transactions,
-        // per-category totals, and net-worth headline.
+        // per-category totals, net-worth headline, and findings.
         await Promise.all([loadAccounts(), loadRecent(), loadSpending(),
-                           loadNetWorth(), loadMiniChart()]);
+                           loadNetWorth(), loadMiniChart(), loadFindingsPanel()]);
         // Bump the last-synced timestamp.
         var ls = document.getElementById('last-synced');
         if (ls) {
@@ -354,98 +354,74 @@
     }
   }
 
-  // ── Alerts panel (top-of-dashboard, hidden when nothing to show) ──────
+  // ── Findings panel (top-of-dashboard, hidden when nothing to show) ────
+  // Driven by /api/findings/dashboard which returns the top 3 by tier.
   function fmtUSDFromCents(cents) {
     if (cents == null) return '';
     return (Number(cents) / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
   }
 
-  async function loadAlerts() {
-    var panel = document.getElementById('alerts-panel');
-    var list = document.getElementById('alerts-panel-list');
+  async function loadFindingsPanel() {
+    var panel = document.getElementById('findings-panel');
+    var list = document.getElementById('findings-panel-list');
+    var badge = document.getElementById('findings-new-badge');
     if (!panel || !list) return;
-    var items = [];
-    // Run both fetches in parallel — independent and small.
     try {
-      var three = await Promise.all([
-        fetch('/api/budget-limits',          { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : { budget_limits: [] }; }),
-        fetch('/api/low-balance-thresholds', { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : { thresholds: [] }; }),
-        fetch('/api/subscriptions',          { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : { subscriptions: [] }; }),
-      ]);
-      var budgets = three[0].budget_limits || [];
-      var thresholds = three[1].thresholds || [];
-      var subs = three[2].subscriptions || [];
-
-      for (var i = 0; i < budgets.length; i++) {
-        var b = budgets[i];
-        if (b.status === 'warning' || b.status === 'over') {
-          items.push({
-            kind: 'budget',
-            severity: b.status,
-            text: escapeHtml(b.category_name) + ': ' + (b.pct_used != null ? b.pct_used + '%' : '—')
-                + ' of ' + fmtUSDFromCents(b.monthly_limit_cents) + ' budget'
-                + (b.status === 'over' ? ' (over)' : ''),
-            href: '/budgets',
-          });
-        }
+      var r = await fetch('/api/findings/dashboard', { credentials: 'same-origin' });
+      if (!r.ok) throw new Error('status ' + r.status);
+      var json = await r.json();
+      var rows = json.findings || [];
+      if (rows.length === 0) {
+        panel.hidden = true; // hide entirely when nothing to show
+        return;
       }
-      for (var j = 0; j < thresholds.length; j++) {
-        var t = thresholds[j];
-        if (t.triggered) {
-          items.push({
-            kind: 'low-balance',
-            severity: 'warning',
-            text: escapeHtml(t.account_name) + (t.mask ? ' ····' + escapeHtml(t.mask) : '')
-                + ': ' + fmtUSDFromCents(t.current_balance_cents)
-                + ' (below ' + fmtUSDFromCents(t.threshold_cents) + ' threshold)',
-            href: '/alerts',
-          });
-        }
+      list.innerHTML = rows.map(function (f) {
+        return '<div class="f-card f-tier-' + f.tier + '" data-id="' + f.id + '" data-href="' + (f.deep_link_path || '') + '">'
+          + '<div class="f-stripe"></div>'
+          + '<div class="f-body">'
+          +   '<div class="f-title">' + escapeHtml(f.title) + '</div>'
+          +   '<div class="f-text">' + escapeHtml(f.body) + '</div>'
+          + '</div>'
+          + '<button class="f-dismiss" type="button" aria-label="Dismiss">×</button>'
+          + '</div>';
+      }).join('');
+      if (json.new_since_last_visit > 0) {
+        badge.hidden = false;
+        badge.textContent = json.new_since_last_visit + ' new';
+      } else {
+        badge.hidden = true;
       }
-
-      // Price-change alert: count active recurring charges where
-      // price_change_detected=true AND the row was updated in the last 30 days.
-      var THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
-      var nowMs = Date.now();
-      var priceChangeCount = 0;
-      for (var k = 0; k < subs.length; k++) {
-        var s = subs[k];
-        if (s.status !== 'active' || !s.price_change_detected) continue;
-        if (!s.updated_at) continue;
-        if (nowMs - Date.parse(s.updated_at) <= THIRTY_DAYS_MS) priceChangeCount++;
-      }
-      if (priceChangeCount > 0) {
-        items.push({
-          kind: 'price-change',
-          severity: 'warning',
-          text: priceChangeCount + ' price change' + (priceChangeCount === 1 ? '' : 's')
-              + ' detected this month',
-          href: '/subscriptions',
+      panel.hidden = false;
+      list.querySelectorAll('.f-card').forEach(function (card) {
+        var btn = card.querySelector('.f-dismiss');
+        if (btn) btn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          dismissFinding(card.dataset.id);
         });
-      }
+        card.addEventListener('click', function () {
+          var href = card.dataset.href;
+          if (href) window.location.href = href;
+        });
+      });
     } catch (e) {
-      // Quiet on error — alerts panel just stays hidden.
-      return;
+      // Quiet on error — panel stays hidden.
     }
+  }
 
-    if (items.length === 0) {
-      panel.hidden = true;
-      return;
-    }
-    list.innerHTML = items.map(function (a) {
-      return '<li class="alert-item alert-' + a.severity + '">'
-        + '<span class="alert-icon">' + (a.severity === 'over' ? '🛑' : '⚠') + '</span> '
-        + a.text + ' <a class="alert-link" href="' + a.href + '">view →</a>'
-        + '</li>';
-    }).join('');
-    panel.hidden = false;
+  async function dismissFinding(id) {
+    try {
+      await fetch('/api/findings/' + encodeURIComponent(id) + '/dismiss', {
+        method: 'POST', credentials: 'same-origin',
+      });
+      loadFindingsPanel();
+    } catch (e) { /* silent */ }
   }
 
   // ── kick off initial loads ────────────────────────────────────────────
   if (document.getElementById('institutions-list')) loadAccounts();
   if (document.getElementById('txn-list')) loadRecent();
   if (document.getElementById('spending-chart')) loadSpending();
-  if (document.getElementById('alerts-panel')) loadAlerts();
+  if (document.getElementById('findings-panel')) loadFindingsPanel();
   if (document.getElementById('nw-total')) loadNetWorth();
   if (document.getElementById('nw-mini-chart')) loadMiniChart();
 })();

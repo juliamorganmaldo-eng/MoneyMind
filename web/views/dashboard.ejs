@@ -12,6 +12,7 @@
       <a href="/subscriptions" class="btn-ghost btn-inline">Subscriptions</a>
       <a href="/net-worth"     class="btn-ghost btn-inline">Net Worth</a>
       <a href="/insights"      class="btn-ghost btn-inline">Insights</a>
+      <a href="/findings"      class="btn-ghost btn-inline">Findings</a>
       <a href="/alerts"        class="btn-ghost btn-inline">Alerts</a>
       <form method="POST" action="/logout" class="logout-form">
         <button type="submit" class="btn-ghost">Log out</button>
@@ -20,10 +21,13 @@
   </header>
 
   <main class="app-main">
-    <%# Alerts panel — only rendered if there's something to show. JS sets hidden=false. %>
-    <section id="alerts-panel" class="panel alerts-panel" hidden>
-      <h2 class="panel-title">⚠ Alerts</h2>
-      <ul id="alerts-panel-list"></ul>
+    <%# Findings panel — only rendered if there's something to show. JS sets hidden=false. %>
+    <section id="findings-panel" class="panel findings-panel" hidden>
+      <div class="panel-header">
+        <h2 class="panel-title">Findings <span id="findings-new-badge" class="findings-new-badge" hidden></span></h2>
+        <a href="/findings" class="btn-ghost btn-inline">View all findings →</a>
+      </div>
+      <div id="findings-panel-list"></div>
     </section>
 
     <section class="panel">

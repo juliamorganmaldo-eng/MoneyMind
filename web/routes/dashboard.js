@@ -145,6 +145,10 @@ router.get('/insights', requireAuth, (req, res) => {
   res.render('insights');
 });
 
+router.get('/findings', requireAuth, (req, res) => {
+  res.render('findings');
+});
+
 router.get('/subscriptions/:id', requireAuth, async (req, res, next) => {
   try {
     const userId = req.session.userId;
