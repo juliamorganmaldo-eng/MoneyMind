@@ -21,6 +21,18 @@
   </header>
 
   <main class="app-main">
+    <% if (typeof flash !== 'undefined' && flash) { %>
+      <div class="alert alert-info" style="margin-bottom: 1rem;"><%= flash %></div>
+    <% } %>
+
+    <% if (!email_verified) { %>
+      <div class="banner-verify">
+        <span>📬 <strong>Verify your email</strong> to unlock bank connections — check your inbox for the link.</span>
+        <button id="resend-verify-btn" type="button" class="btn-ghost btn-inline">Resend verification</button>
+        <span id="resend-verify-msg" class="banner-verify-msg" hidden></span>
+      </div>
+    <% } %>
+
     <%# Findings panel — only rendered if there's something to show. JS sets hidden=false. %>
     <section id="findings-panel" class="panel findings-panel" hidden>
       <div class="panel-header">

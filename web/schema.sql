@@ -341,3 +341,35 @@ CREATE TABLE IF NOT EXISTS findings (
 CREATE INDEX IF NOT EXISTS idx_findings_primary
   ON findings(user_id, is_dismissed, tier, occurred_at DESC);
 CREATE INDEX IF NOT EXISTS idx_findings_user_id ON findings(user_id);
+
+-- ── Email verification + password reset (Phase 4A) ────────────────────
+-- Tokens are stored as SHA-256 hashes only — the plaintext token leaves
+-- the server exactly once (in the email URL) and is never logged.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at         TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_attempts INTEGER NOT NULL DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+  id          SERIAL PRIMARY KEY,
+  user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash  TEXT    NOT NULL UNIQUE,
+  expires_at  TIMESTAMPTZ NOT NULL,
+  used_at     TIMESTAMPTZ,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  ip_address  INET
+);
+CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user_id ON password_reset_tokens(user_id);
+-- Active-token lookups during rate-limit checks query (user, expires, used)
+CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user_active
+  ON password_reset_tokens(user_id, expires_at) WHERE used_at IS NULL;
+
+CREATE TABLE IF NOT EXISTS email_verification_tokens (
+  id          SERIAL PRIMARY KEY,
+  user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash  TEXT    NOT NULL UNIQUE,
+  expires_at  TIMESTAMPTZ NOT NULL,
+  used_at     TIMESTAMPTZ,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_user_id ON email_verification_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_user_active
+  ON email_verification_tokens(user_id, expires_at) WHERE used_at IS NULL;

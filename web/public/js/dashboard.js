@@ -54,6 +54,14 @@
     var linkToken;
     try {
       var r = await fetch('/api/plaid/create-link-token', { method: 'POST', credentials: 'same-origin' });
+      if (r.status === 403) {
+        var j403 = await r.json().catch(function () { return {}; });
+        if (j403.error === 'email_not_verified') {
+          connectBtn.disabled = false;
+          showConnect('Please verify your email before connecting a bank — check your inbox or click "Resend verification" above.', 'error');
+          return;
+        }
+      }
       if (!r.ok) throw new Error('status ' + r.status);
       linkToken = (await r.json()).link_token;
     } catch (e) {
@@ -89,6 +97,32 @@
     handler.open();
   }
   if (connectBtn) connectBtn.addEventListener('click', startLink);
+
+  // ── Resend verification (top banner for unverified users) ────────────
+  var resendVerifyBtn = document.getElementById('resend-verify-btn');
+  var resendVerifyMsg = document.getElementById('resend-verify-msg');
+  if (resendVerifyBtn) {
+    resendVerifyBtn.addEventListener('click', async function () {
+      resendVerifyBtn.disabled = true;
+      var prev = resendVerifyBtn.textContent;
+      resendVerifyBtn.textContent = 'Sending…';
+      resendVerifyMsg.hidden = true;
+      try {
+        var r = await fetch('/api/auth/resend-verification', { method: 'POST', credentials: 'same-origin' });
+        var j = await r.json().catch(function () { return {}; });
+        resendVerifyMsg.hidden = false;
+        if (r.ok) resendVerifyMsg.textContent = 'Sent! Check your inbox.';
+        else if (r.status === 429) resendVerifyMsg.textContent = 'Too many requests. Try again later.';
+        else resendVerifyMsg.textContent = j.error || 'Could not send. Try again.';
+      } catch (e) {
+        resendVerifyMsg.hidden = false;
+        resendVerifyMsg.textContent = 'Network error. Try again.';
+      } finally {
+        resendVerifyBtn.disabled = false;
+        resendVerifyBtn.textContent = prev;
+      }
+    });
+  }
 
   // ── Net Position + grouped accounts (from /api/accounts) ─────────────
   var ASSET_TYPES = { depository: 1, investment: 1 };

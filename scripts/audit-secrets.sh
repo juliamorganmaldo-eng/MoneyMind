@@ -52,6 +52,7 @@ ENCRYPTION_KEY=$(read_env_var ENCRYPTION_KEY)
 DATABASE_URL=$(read_env_var DATABASE_URL)
 PLAID_CLIENT_ID=$(read_env_var PLAID_CLIENT_ID)
 PLAID_SECRET_SANDBOX=$(read_env_var PLAID_SECRET_SANDBOX)
+RESEND_API_KEY=$(read_env_var RESEND_API_KEY)
 
 # Extract just the password from DATABASE_URL: postgresql://user:PASS@host/db
 DB_PASSWORD=""
@@ -115,6 +116,7 @@ scan "DATABASE_URL (full)"   "$DATABASE_URL"
 scan "DB password"           "$DB_PASSWORD"
 scan "PLAID_CLIENT_ID"       "$PLAID_CLIENT_ID"
 scan "PLAID_SECRET_SANDBOX"  "$PLAID_SECRET_SANDBOX"
+scan "RESEND_API_KEY"        "$RESEND_API_KEY"
 
 echo
 echo "Pattern scan (catches secrets we may not have in .env yet):"
@@ -127,6 +129,7 @@ scan_pattern "PEM private key block"       '-----BEGIN [A-Z ]*PRIVATE KEY-----'
 scan_pattern "GitHub token (ghp_/gho_…)"   '\bgh[pousr]_[A-Za-z0-9]{30,}'
 scan_pattern "Anthropic API key"           'sk-ant-[A-Za-z0-9_-]{20,}'
 scan_pattern "Slack token"                 'xox[abprs]-[A-Za-z0-9-]{10,}'
+scan_pattern "Resend API key (re_…)"       're_[A-Za-z0-9_]{20,}'
 
 echo
 echo "Dangerous file paths in stage:"

@@ -16,7 +16,8 @@
     "express": "^4.21.1",
     "express-session": "^1.18.1",
     "pg": "^8.13.1",
-    "plaid": "^42.1.0"
+    "plaid": "^42.1.0",
+    "resend": "^6.12.2"
   },
   "engines": {
     "node": ">=20"

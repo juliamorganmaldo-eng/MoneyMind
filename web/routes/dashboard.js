@@ -9,7 +9,7 @@ router.get('/dashboard', requireAuth, async (req, res, next) => {
     const userId = req.session.userId;
 
     const { rows } = await pool.query(
-      'SELECT email FROM users WHERE id = $1',
+      'SELECT email, email_verified_at FROM users WHERE id = $1',
       [userId]
     );
     const user = rows[0];
@@ -43,7 +43,18 @@ router.get('/dashboard', requireAuth, async (req, res, next) => {
       [userId]
     );
 
-    res.render('dashboard', { email: user.email, items });
+    let flash = null;
+    if (req.session && req.session.flash) {
+      flash = req.session.flash;
+      delete req.session.flash;
+    }
+
+    res.render('dashboard', {
+      email: user.email,
+      email_verified: !!user.email_verified_at,
+      items,
+      flash,
+    });
   } catch (err) {
     next(err);
   }

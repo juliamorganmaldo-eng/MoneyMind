@@ -36,6 +36,21 @@ function ensureConfigured(res) {
 router.post('/api/plaid/create-link-token', async (req, res) => {
   if (!ensureConfigured(res)) return;
   const userId = req.session.userId;
+
+  // Gate on email verification — connecting a bank account is a meaningful
+  // action and we want a verified email on file before it happens.
+  try {
+    const { rows: u } = await pool.query(
+      'SELECT email_verified_at FROM users WHERE id = $1', [userId]
+    );
+    if (u.length === 0 || !u[0].email_verified_at) {
+      return res.status(403).json({ error: 'email_not_verified' });
+    }
+  } catch (err) {
+    console.error('[plaid] verification check failed:', err.message);
+    return res.status(500).json({ error: 'Server error.' });
+  }
+
   try {
     const r = await plaidClient.linkTokenCreate({
       user: { client_user_id: String(userId) },

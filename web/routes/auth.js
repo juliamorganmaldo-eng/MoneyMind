@@ -34,7 +34,10 @@ function logInAs(req, userId) {
 }
 
 router.get('/login', redirectIfAuthed, (req, res) => {
-  res.render('login', { error: null, email: '' });
+  let flash = null;
+  if (req.query.reset === 'ok') flash = 'Password updated. Please sign in with your new password.';
+  if (req.query.verified === 'ok') flash = 'Email verified! You can now connect a bank account.';
+  res.render('login', { error: null, email: '', flash });
 });
 
 router.post('/login', redirectIfAuthed, async (req, res, next) => {
@@ -43,7 +46,7 @@ router.post('/login', redirectIfAuthed, async (req, res, next) => {
     const password = typeof req.body.password === 'string' ? req.body.password : '';
 
     const generic = 'Invalid email or password.';
-    const render = (error) => res.status(401).render('login', { error, email });
+    const render = (error) => res.status(401).render('login', { error, email, flash: null });
 
     if (!email || !password) return render(generic);
 
@@ -144,6 +147,14 @@ router.post('/register', redirectIfAuthed, async (req, res, next) => {
       );
 
       await client.query('COMMIT');
+
+      // Fire verification email (non-blocking — registration succeeds even if Resend fails).
+      try {
+        const { issueVerification } = require('./email-verification');
+        await issueVerification(userId, email);
+      } catch (e) {
+        console.error('[register] verification email failed:', e.message);
+      }
 
       await logInAs(req, userId);
       return res.redirect('/dashboard');

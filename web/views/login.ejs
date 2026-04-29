@@ -11,6 +11,10 @@
     <% if (error) { %>
       <div class="alert alert-error"><%= error %></div>
     <% } %>
+    <%# Flash messages from query — kept simple to avoid an extra session round-trip. %>
+    <% if (typeof flash !== 'undefined' && flash) { %>
+      <div class="alert alert-info"><%= flash %></div>
+    <% } %>
 
     <form method="POST" action="/login" autocomplete="on" novalidate>
       <label for="email">Email</label>
@@ -26,6 +30,9 @@
       <button type="submit" class="btn-primary">Sign in</button>
     </form>
 
+    <p class="foot">
+      <a href="/forgot-password">Forgot your password?</a>
+    </p>
     <p class="foot">
       No account? <a href="/register">Register with an invite code</a>
     </p>

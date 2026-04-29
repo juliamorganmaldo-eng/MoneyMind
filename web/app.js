@@ -21,6 +21,8 @@ const netWorthRoutes = require('./routes/net-worth');
 const insightsRoutes = require('./routes/insights');
 const userSettingsRoutes = require('./routes/user-settings');
 const findingsRoutes = require('./routes/findings');
+const passwordResetRoutes = require('./routes/password-reset');
+const { router: emailVerificationRoutes } = require('./routes/email-verification');
 
 const PORT = Number(process.env.PORT) || 3001;
 const IS_PROD = process.env.NODE_ENV === 'production';
@@ -38,6 +40,14 @@ try {
   assertEncryptionKey();
 } catch (err) {
   console.error('[fatal] ' + err.message);
+  process.exit(1);
+}
+
+// Production-readiness gate. Empty/missing → fatal. The literal placeholder
+// string is allowed for dev — sends become no-ops and the email lib logs
+// a warning at module load. In production set this to the real key.
+if (!process.env.RESEND_API_KEY) {
+  console.error('[fatal] RESEND_API_KEY is missing. Get one at https://resend.com/api-keys');
   process.exit(1);
 }
 
@@ -79,6 +89,14 @@ app.get('/', (req, res) => {
 });
 
 app.use(authRoutes);
+
+// Public auth-flow routes mount BEFORE any router that does
+// `router.use(requireAuth)`. Otherwise requireAuth on a later router
+// would intercept un-matched paths (like /forgot-password) and redirect
+// them to /login before they reach their handler.
+app.use(passwordResetRoutes);
+app.use(emailVerificationRoutes);
+
 app.use(dashboardRoutes);
 app.use(plaidRoutes);
 app.use(transactionRoutes);
