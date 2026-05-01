@@ -373,3 +373,42 @@ CREATE TABLE IF NOT EXISTS email_verification_tokens (
 CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_user_id ON email_verification_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_user_active
   ON email_verification_tokens(user_id, expires_at) WHERE used_at IS NULL;
+
+-- ── Login rate limiting + security alerts (Phase 4B) ──────────────────
+-- failed_login_attempts: one row per failed POST /login. NO password
+-- column ever — we never store what was attempted, only that an attempt
+-- failed. Two indexes: per-IP for the 15-min throttle, per-email for the
+-- 1-hour account-wide alert signal.
+--
+-- Counts both wrong-password AND non-existent-email attempts (the route
+-- always inserts on failure regardless of which case it was — preserves
+-- the timing-safe semantics already in place via DUMMY_HASH).
+CREATE TABLE IF NOT EXISTS failed_login_attempts (
+  id              SERIAL PRIMARY KEY,
+  ip_address      INET NOT NULL,
+  email_attempted TEXT NOT NULL,
+  attempted_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_failed_login_attempts_ip_time
+  ON failed_login_attempts(ip_address, attempted_at DESC);
+CREATE INDEX IF NOT EXISTS idx_failed_login_attempts_email_time
+  ON failed_login_attempts(email_attempted, attempted_at DESC);
+
+-- security_alerts_sent: rate-limits the security-alert email to at most
+-- one per (user, alert_type) per hour. Insert-then-check: route reads
+-- "any sent in the last hour for this user+type?" before sending.
+CREATE TABLE IF NOT EXISTS security_alerts_sent (
+  id         SERIAL PRIMARY KEY,
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  alert_type TEXT    NOT NULL,
+  sent_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT security_alerts_sent_alert_type_check
+    CHECK (alert_type IN ('failed_login_burst'))
+);
+CREATE INDEX IF NOT EXISTS idx_security_alerts_sent_user_type_time
+  ON security_alerts_sent(user_id, alert_type, sent_at DESC);
+
+-- Persists the user's last "Remember me" choice, so the login form can
+-- pre-check the box on their next visit. Stored as a non-sensitive
+-- mm_remember_pref cookie too, but the column is the source of truth.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS remember_me_default BOOLEAN NOT NULL DEFAULT FALSE;

@@ -27,6 +27,13 @@
         id="password" name="password" type="password" required
         autocomplete="current-password" minlength="1" />
 
+      <label class="checkbox-row" for="remember_me">
+        <input
+          id="remember_me" name="remember_me" type="checkbox" value="on"
+          <%= (typeof rememberPref !== 'undefined' && rememberPref) ? 'checked' : '' %> />
+        <span>Remember me on this device</span>
+      </label>
+
       <button type="submit" class="btn-primary">Sign in</button>
     </form>
 

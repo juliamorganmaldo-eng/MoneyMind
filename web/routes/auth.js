@@ -2,6 +2,12 @@ const express = require('express');
 const bcrypt = require('bcrypt');
 const { pool } = require('../db');
 const { redirectIfAuthed } = require('../middleware/auth');
+const {
+  loginRateLimit,
+  recordFailedAttempt,
+  clearFailedAttemptsForIp,
+} = require('../middleware/rate-limit');
+const { maybeSendSecurityAlert } = require('../lib/auth/security-alert');
 const { DEFAULT_CATEGORY_NAMES } = require('../lib/category-mapping');
 
 const router = express.Router();
@@ -9,6 +15,17 @@ const router = express.Router();
 const BCRYPT_ROUNDS = 12;
 const MIN_PASSWORD_LENGTH = 10;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// "Remember me" lifetimes — also enforced on the cookie maxAge in app.js.
+const SESSION_MAX_AGE_DEFAULT_MS = 12 * 60 * 60 * 1000;        // 12 hours
+const SESSION_MAX_AGE_REMEMBER_MS = 30 * 24 * 60 * 60 * 1000;  // 30 days
+
+// Persists the user's last "Remember me" choice across logout. Not
+// security-sensitive — just a UX nicety so the box is pre-checked next
+// visit. The DB column users.remember_me_default is the source of truth
+// once you log in; this cookie is what the LOGIN form reads.
+const REMEMBER_PREF_COOKIE = 'mm_remember_pref';
+const REMEMBER_PREF_MAX_AGE_MS = 365 * 24 * 60 * 60 * 1000;
 
 // A precomputed hash of a throwaway value. Used so that failed-lookup logins
 // spend the same time as real ones, defeating user-enumeration via timing.
@@ -22,33 +39,76 @@ function normalizeCode(v) {
   return typeof v === 'string' ? v.trim().toUpperCase() : '';
 }
 
-// Regenerate the session to prevent fixation, then set userId and save.
-function logInAs(req, userId) {
+// Regenerate the session to prevent fixation, then set userId, login
+// timestamps, and remember-me lifetime. The cookie's maxAge is set
+// per-session (not globally in app.js) so "Remember me" can stretch a
+// single session to 30 days while a normal login stays at 12 hours.
+function logInAs(req, userId, { rememberMe }) {
   return new Promise((resolve, reject) => {
     req.session.regenerate((err) => {
       if (err) return reject(err);
       req.session.userId = userId;
+      req.session.loginAt = Date.now();
+      req.session.lastActivityAt = Date.now();
+      req.session.rememberMe = !!rememberMe;
+      req.session.cookie.maxAge = rememberMe
+        ? SESSION_MAX_AGE_REMEMBER_MS
+        : SESSION_MAX_AGE_DEFAULT_MS;
       req.session.save((err2) => (err2 ? reject(err2) : resolve()));
     });
   });
+}
+
+// Parse the mm_remember_pref cookie out of the raw Cookie header. We
+// don't use cookie-parser app-wide (just to read one non-sensitive
+// value), so this avoids adding a dependency for a one-line need.
+function rememberPrefFromCookie(req) {
+  const header = req.headers.cookie || '';
+  const m = header.match(new RegExp('(?:^|;\\s*)' + REMEMBER_PREF_COOKIE + '=([^;]*)'));
+  return m ? m[1] === '1' : false;
 }
 
 router.get('/login', redirectIfAuthed, (req, res) => {
   let flash = null;
   if (req.query.reset === 'ok') flash = 'Password updated. Please sign in with your new password.';
   if (req.query.verified === 'ok') flash = 'Email verified! You can now connect a bank account.';
-  res.render('login', { error: null, email: '', flash });
+  if (req.query.reason === 'idle') flash = 'You were signed out due to inactivity. Please sign in again.';
+  if (req.query.reason === 'expired') flash = 'Your session has expired. Please sign in again.';
+  res.render('login', {
+    error: null,
+    email: '',
+    flash,
+    rememberPref: rememberPrefFromCookie(req),
+  });
 });
 
-router.post('/login', redirectIfAuthed, async (req, res, next) => {
+router.post('/login', loginRateLimit, redirectIfAuthed, async (req, res, next) => {
+  const email = normalizeEmail(req.body.email);
+  const password = typeof req.body.password === 'string' ? req.body.password : '';
+  const rememberMe = req.body.remember_me === 'on' || req.body.remember_me === '1';
+  const ip = req.ip;
+
+  const generic = 'Invalid email or password.';
+  const render = (error) =>
+    res.status(401).render('login', { error, email, flash: null, rememberPref: rememberMe });
+
+  // Persists the box's checked state across the next /login GET.
+  res.cookie(REMEMBER_PREF_COOKIE, rememberMe ? '1' : '0', {
+    path: '/',
+    httpOnly: false, // intentional — purely UX, no auth value
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: REMEMBER_PREF_MAX_AGE_MS,
+  });
+
   try {
-    const email = normalizeEmail(req.body.email);
-    const password = typeof req.body.password === 'string' ? req.body.password : '';
-
-    const generic = 'Invalid email or password.';
-    const render = (error) => res.status(401).render('login', { error, email, flash: null });
-
-    if (!email || !password) return render(generic);
+    if (!email || !password) {
+      // Still record — an empty submission against a real email is part
+      // of the "trying to find a user" pattern. Insert with email='' if
+      // empty so the per-email count for real emails stays accurate.
+      await recordFailedAttempt(ip, email);
+      return render(generic);
+    }
 
     const { rows } = await pool.query(
       'SELECT id, password_hash FROM users WHERE email = $1',
@@ -60,14 +120,31 @@ router.post('/login', redirectIfAuthed, async (req, res, next) => {
     const hash = user ? user.password_hash : DUMMY_HASH;
     const ok = await bcrypt.compare(password, hash);
 
-    if (!user || !ok) return render(generic);
+    if (!user || !ok) {
+      await recordFailedAttempt(ip, email);
+      // Account-wide signal — fire-and-forget so a Resend hiccup never
+      // leaks signal to the attacker via response timing.
+      maybeSendSecurityAlert(email).catch((e) =>
+        console.error('[security-alert] dispatch failed:', e.message)
+      );
+      return render(generic);
+    }
 
-    await logInAs(req, user.id);
+    // Success — reset the per-IP failure budget and persist remember-me
+    // pref to the user row (source of truth across browsers).
+    await clearFailedAttemptsForIp(ip);
+    await pool.query(
+      'UPDATE users SET remember_me_default = $1, updated_at = NOW() WHERE id = $2',
+      [rememberMe, user.id]
+    );
+
+    await logInAs(req, user.id, { rememberMe });
     return res.redirect('/dashboard');
   } catch (err) {
     return next(err);
   }
 });
+
 
 router.get('/register', redirectIfAuthed, (req, res) => {
   res.render('register', { error: null, email: '', inviteCode: '' });
@@ -156,7 +233,7 @@ router.post('/register', redirectIfAuthed, async (req, res, next) => {
         console.error('[register] verification email failed:', e.message);
       }
 
-      await logInAs(req, userId);
+      await logInAs(req, userId, { rememberMe: false });
       return res.redirect('/dashboard');
     } catch (err) {
       await client.query('ROLLBACK').catch(() => {});
