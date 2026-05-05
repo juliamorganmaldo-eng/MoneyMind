@@ -1,0 +1,8 @@
+<%# Reusable empty-state CTA for users with no connected banks.
+   Pass `message` (e.g. "Connect a bank to set low-balance alerts").
+   Renders inside an existing .panel — caller controls the wrapper. -%>
+<div class="empty-cta">
+  <div class="empty-cta-emoji" aria-hidden="true">🏦</div>
+  <p class="empty-cta-text"><%= message %></p>
+  <a href="/dashboard" class="btn-primary btn-inline empty-cta-btn">+ Connect a bank</a>
+</div>

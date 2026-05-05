@@ -1,0 +1,27 @@
+<%- include('../partials/head', { title: 'Something went wrong' }) %>
+<body class="app-body">
+  <%- include('../partials/error-header', { authed }) %>
+
+  <main class="app-main app-main-error">
+    <section class="panel error-panel">
+      <div class="error-emoji" aria-hidden="true">🛠</div>
+      <h1 class="error-heading">Something went wrong on our end</h1>
+      <p class="error-body">
+        We've been notified. Try again in a moment, or head back to your dashboard.
+      </p>
+
+      <p class="error-suggest">
+        <% if (authed) { %>
+          <a href="/dashboard" class="btn-primary btn-inline">Back to dashboard</a>
+        <% } else { %>
+          <a href="/login" class="btn-primary btn-inline">Back to sign in</a>
+        <% } %>
+      </p>
+
+      <%# Reference id — useful if the user emails about a problem. Never
+          include error.message or stack — those are server-side only. -%>
+      <p class="error-ref">Reference: <code><%= error_id %></code></p>
+    </section>
+  </main>
+</body>
+</html>

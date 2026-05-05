@@ -1,8 +1,23 @@
 const express = require('express');
 const { pool } = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const { render404 } = require('../lib/render-error');
+const { countAccountsForUser } = require('../lib/onboarding');
 
 const router = express.Router();
+
+// Resource-not-found copy for detail pages. Phrase deliberately doesn't
+// say "doesn't exist" alone — that would let an attacker enumerate IDs
+// to discover whether other users have a row at that ID. By saying
+// "no longer exists or isn't yours" we cover both cases identically.
+const NOT_FOUND_BUDGET = {
+  heading: "We can't find that budget category",
+  body: "This budget category isn't yours, or it no longer exists.",
+};
+const NOT_FOUND_SUBSCRIPTION = {
+  heading: "We can't find that subscription",
+  body: "This subscription no longer exists, or it isn't yours.",
+};
 
 router.get('/dashboard', requireAuth, async (req, res, next) => {
   try {
@@ -106,7 +121,12 @@ router.get('/transactions', requireAuth, async (req, res, next) => {
     const months = buildMonthOptions(minRow[0].earliest);
     const currentMonth = months.length ? months[0].value : null;
 
-    res.render('transactions', { accounts, months, currentMonth });
+    res.render('transactions', {
+      accounts,
+      months,
+      currentMonth,
+      account_count: accounts.length,
+    });
   } catch (err) {
     next(err);
   }
@@ -114,49 +134,81 @@ router.get('/transactions', requireAuth, async (req, res, next) => {
 
 router.get('/categories', requireAuth, (req, res) => {
   // The page itself is just a shell — JS hydrates from /api/categories.
+  // Categories are seeded at signup so there's always data to render —
+  // no account_count gating needed.
   res.render('categories');
 });
 
-router.get('/budgets', requireAuth, (req, res) => {
-  res.render('budgets');
+router.get('/budgets', requireAuth, async (req, res, next) => {
+  try {
+    const account_count = await countAccountsForUser(req.session.userId);
+    res.render('budgets', { account_count });
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.get('/budgets/:category_id', requireAuth, async (req, res, next) => {
   try {
     const userId = req.session.userId;
     const categoryId = Number.parseInt(req.params.category_id, 10);
-    if (!Number.isFinite(categoryId)) return res.status(404).send('Not found');
+    if (!Number.isFinite(categoryId)) return render404(req, res, NOT_FOUND_BUDGET);
 
     // Render the page only if the category belongs to this user — the
     // server-rendered <h1> would otherwise leak existence/name.
+    // Cross-user lookup intentionally returns 404 (not 403) so an
+    // attacker can't tell another user's category id from a non-existent one.
     const { rows } = await pool.query(
       'SELECT id, name FROM categories WHERE id = $1 AND user_id = $2',
       [categoryId, userId]
     );
-    if (rows.length === 0) return res.status(404).send('Not found');
+    if (rows.length === 0) return render404(req, res, NOT_FOUND_BUDGET);
     res.render('budgets-detail', { category: rows[0] });
   } catch (err) {
     next(err);
   }
 });
 
-router.get('/alerts', requireAuth, (req, res) => {
-  res.render('alerts');
+router.get('/alerts', requireAuth, async (req, res, next) => {
+  try {
+    const account_count = await countAccountsForUser(req.session.userId);
+    res.render('alerts', { account_count });
+  } catch (err) {
+    next(err);
+  }
 });
 
-router.get('/subscriptions', requireAuth, (req, res) => {
-  res.render('subscriptions');
+router.get('/subscriptions', requireAuth, async (req, res, next) => {
+  try {
+    const account_count = await countAccountsForUser(req.session.userId);
+    res.render('subscriptions', { account_count });
+  } catch (err) {
+    next(err);
+  }
 });
 
-router.get('/net-worth', requireAuth, (req, res) => {
-  res.render('net-worth');
+router.get('/net-worth', requireAuth, async (req, res, next) => {
+  try {
+    const account_count = await countAccountsForUser(req.session.userId);
+    res.render('net-worth', { account_count });
+  } catch (err) {
+    next(err);
+  }
 });
 
-router.get('/insights', requireAuth, (req, res) => {
-  res.render('insights');
+router.get('/insights', requireAuth, async (req, res, next) => {
+  try {
+    const account_count = await countAccountsForUser(req.session.userId);
+    res.render('insights', { account_count });
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.get('/findings', requireAuth, (req, res) => {
+  // Findings are server-derived from transactions, so account_count is
+  // implicitly 0 → 0 findings. The findings.js empty-state copy already
+  // handles "nothing to show".
   res.render('findings');
 });
 
@@ -164,12 +216,12 @@ router.get('/subscriptions/:id', requireAuth, async (req, res, next) => {
   try {
     const userId = req.session.userId;
     const id = Number.parseInt(req.params.id, 10);
-    if (!Number.isFinite(id)) return res.status(404).send('Not found');
+    if (!Number.isFinite(id)) return render404(req, res, NOT_FOUND_SUBSCRIPTION);
     const { rows } = await pool.query(
       'SELECT id, display_name FROM recurring_charges WHERE id = $1 AND user_id = $2',
       [id, userId]
     );
-    if (rows.length === 0) return res.status(404).send('Not found');
+    if (rows.length === 0) return render404(req, res, NOT_FOUND_SUBSCRIPTION);
     res.render('subscription-detail', { subscription: rows[0] });
   } catch (err) {
     next(err);

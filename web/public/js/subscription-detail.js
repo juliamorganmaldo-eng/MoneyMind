@@ -31,7 +31,12 @@
       infoEl.textContent = rows.length + ' transaction' + (rows.length === 1 ? '' : 's') + ' · ' + fmtUSD(total) + ' total';
 
       if (rows.length === 0) {
-        listEl.innerHTML = '<p class="empty">No transactions found.</p>';
+        // Edge case: the recurring_charges row exists but no transactions
+        // in the cluster window match. Usually means the source rows were
+        // removed (account disconnect, Plaid removed_count) since detection.
+        listEl.innerHTML = '<p class="empty">We can\'t find the transactions for this charge. '
+          + 'It may have been removed since detection ran. '
+          + '<a href="/subscriptions">← Back to subscriptions</a></p>';
         return;
       }
       listEl.innerHTML = '<ul class="txn-list">' + rows.map(function (t) {

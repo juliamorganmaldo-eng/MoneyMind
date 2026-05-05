@@ -236,6 +236,100 @@ form input:focus {
   padding: .25rem 0;
 }
 
+/* ── Branded error pages (404 / 500 / 403) ─────────────────────────── */
+.app-main-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100vh - 5rem);
+}
+.error-panel {
+  max-width: 520px;
+  text-align: center;
+}
+.error-emoji {
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
+}
+.error-heading {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--green-900);
+  margin: 0 0 .75rem;
+}
+.error-body {
+  color: var(--ink);
+  font-size: 1rem;
+  line-height: 1.5;
+  margin: 0 0 1.5rem;
+}
+.error-suggest {
+  margin: 1rem 0 0;
+  font-size: .9375rem;
+  color: var(--ink);
+}
+.error-suggest a { color: var(--green-700); margin: 0 .25rem; }
+.error-ref {
+  margin-top: 2rem;
+  font-size: .8125rem;
+  color: var(--muted);
+}
+.error-ref code {
+  background: var(--green-50);
+  padding: .125rem .375rem;
+  border-radius: 4px;
+  color: var(--green-900);
+}
+.brand-link {
+  text-decoration: none;
+  color: inherit;
+}
+
+/* ── First-run welcome banner (dashboard) ──────────────────────────── */
+.welcome-hero {
+  background: linear-gradient(135deg, var(--green-50) 0%, var(--white) 100%);
+  border: 1px solid var(--green-100);
+  border-radius: var(--radius);
+  padding: 2.5rem 2rem;
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+.welcome-hero h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--green-900);
+  margin: 0 0 .5rem;
+}
+.welcome-hero p {
+  color: var(--ink);
+  font-size: 1rem;
+  line-height: 1.5;
+  max-width: 480px;
+  margin: 0 auto 1.5rem;
+}
+.welcome-hero .btn-primary {
+  display: inline-block;
+  width: auto;
+  margin: 0 auto;
+  padding: .875rem 1.75rem;
+  font-size: 1rem;
+}
+.welcome-hero .welcome-foot {
+  margin: 1.25rem 0 0;
+  font-size: .8125rem;
+  color: var(--muted);
+}
+
+/* Reusable "no accounts yet" empty-state CTA used inside .panel on /budgets,
+   /alerts, /subscriptions, /net-worth, /insights, /transactions. */
+.empty-cta {
+  text-align: center;
+  padding: 2rem 1rem;
+}
+.empty-cta-emoji { font-size: 2rem; margin-bottom: .75rem; }
+.empty-cta-text  { color: var(--ink); font-size: 1rem; margin: 0 0 1.25rem; }
+.empty-cta-btn   { display: inline-block; }
+
 .institution-list {
   list-style: none;
   display: flex;
@@ -689,6 +783,15 @@ form input:focus {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--green-900);
+}
+.cat-empty {
+  /* Spans both the count and total columns so a brand-new category row
+     reads as a single "No transactions yet" line, not split awkwardly. */
+  grid-column: 3 / 5;
+  text-align: right;
+  color: var(--muted);
+  font-size: .8125rem;
+  font-style: italic;
 }
 
 /* ── dashboard spending chart ────────────────────────────────────────── */

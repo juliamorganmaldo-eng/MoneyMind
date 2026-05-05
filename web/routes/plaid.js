@@ -4,6 +4,7 @@ const { plaidClient, plaidConfigured } = require('../lib/plaid');
 const { encrypt } = require('../lib/crypto');
 const { pool } = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const { wantsHtml, render403 } = require('../lib/render-error');
 
 const router = express.Router();
 
@@ -44,6 +45,16 @@ router.post('/api/plaid/create-link-token', async (req, res) => {
       'SELECT email_verified_at FROM users WHERE id = $1', [userId]
     );
     if (u.length === 0 || !u[0].email_verified_at) {
+      // Browser nav (Accept: text/html) gets the branded 403 page.
+      // The dashboard JS calls this with default fetch Accept and is
+      // handled in the JSON branch — preserves the existing XHR contract.
+      if (wantsHtml(req)) {
+        return render403(req, res, {
+          heading: 'Verify your email first',
+          body: "We need a verified email on file before connecting a bank. Check your inbox for the link, or resend the verification email from your dashboard.",
+          next_step: { href: '/dashboard', label: 'Back to dashboard' },
+        });
+      }
       return res.status(403).json({ error: 'email_not_verified' });
     }
   } catch (err) {

@@ -22,41 +22,52 @@
   <main class="app-main">
     <div class="page-header-row">
       <h1 class="page-title">Net Worth</h1>
-      <button id="refresh-btn" class="btn-ghost btn-inline" type="button">↻ Refresh balances</button>
+      <% if (account_count > 0) { %>
+        <button id="refresh-btn" class="btn-ghost btn-inline" type="button">↻ Refresh balances</button>
+      <% } %>
     </div>
-    <div id="nw-status" class="alert" hidden></div>
 
-    <section class="panel net-headline">
-      <div class="net-headline-row">
-        <div>
-          <div class="net-label">Net Worth</div>
-          <div id="nw-total" class="net-amount">—</div>
+    <% if (account_count === 0) { %>
+      <section class="panel">
+        <%- include('partials/no-accounts-cta', { message: 'Connect a bank to see your net worth — assets, liabilities, and a 12-month history.' }) %>
+      </section>
+    <% } else { %>
+      <div id="nw-status" class="alert" hidden></div>
+
+      <section class="panel net-headline">
+        <div class="net-headline-row">
+          <div>
+            <div class="net-label">Net Worth</div>
+            <div id="nw-total" class="net-amount">—</div>
+          </div>
+          <div class="net-split">
+            <div><div class="net-label">Assets</div>
+                 <div id="nw-assets" class="net-sub net-positive">—</div></div>
+            <div><div class="net-label">Liabilities</div>
+                 <div id="nw-liabs" class="net-sub net-negative">—</div></div>
+          </div>
         </div>
-        <div class="net-split">
-          <div><div class="net-label">Assets</div>
-               <div id="nw-assets" class="net-sub net-positive">—</div></div>
-          <div><div class="net-label">Liabilities</div>
-               <div id="nw-liabs" class="net-sub net-negative">—</div></div>
+      </section>
+
+      <section class="panel">
+        <h2 class="panel-title">12-month history</h2>
+        <div id="nw-chart" class="nw-chart">
+          <div class="empty"><span class="spinner-inline">…</span> Loading…</div>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <section class="panel">
-      <h2 class="panel-title">12-month history</h2>
-      <div id="nw-chart" class="nw-chart">
-        <div class="empty"><span class="spinner-inline">…</span> Loading…</div>
-      </div>
-    </section>
-
-    <section class="panel">
-      <h2 class="panel-title">Account Classifications</h2>
-      <div id="nw-error" class="alert alert-error" hidden></div>
-      <div id="nw-accounts">
-        <div class="empty"><span class="spinner-inline">…</span> Loading…</div>
-      </div>
-    </section>
+      <section class="panel">
+        <h2 class="panel-title">Account Classifications</h2>
+        <div id="nw-error" class="alert alert-error" hidden></div>
+        <div id="nw-accounts">
+          <div class="empty"><span class="spinner-inline">…</span> Loading…</div>
+        </div>
+      </section>
+    <% } %>
   </main>
 
-  <script src="/js/net-worth.js"></script>
+  <% if (account_count > 0) { %>
+    <script src="/js/net-worth.js"></script>
+  <% } %>
 </body>
 </html>

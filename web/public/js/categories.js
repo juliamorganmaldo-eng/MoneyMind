@@ -41,13 +41,21 @@
       return;
     }
     listEl.innerHTML = '<ul class="cat-list">' + cats.map(function (c) {
+      var spend = Number(c.current_month_spend) || 0;
+      var count = Number(c.transaction_count) || 0;
+      // When a category has no activity at all this month, show a single
+      // "No transactions yet" line instead of "0 transactions, $0.00" —
+      // less visual noise for a brand-new user who has 5 zeroed rows.
+      var metricsHtml = (count === 0 && spend === 0)
+        ? '<span class="cat-empty" colspan="2">No transactions yet</span>'
+        : '<span class="cat-count">' + count + ' txn' + (count === 1 ? '' : 's') + '</span>'
+          + '<span class="cat-total">' + fmtUSD(spend) + '</span>';
       return '<li class="cat-row" data-id="' + c.id + '">'
         + '<span class="cat-color cat-color-' + c.display_order + '" aria-hidden="true"></span>'
         + '<span class="cat-name" tabindex="0" role="button" aria-label="Rename ' + escapeHtml(c.name) + '">'
         +   escapeHtml(c.name)
         + '</span>'
-        + '<span class="cat-count">' + c.transaction_count + ' txn' + (c.transaction_count === 1 ? '' : 's') + '</span>'
-        + '<span class="cat-total">' + fmtUSD(c.current_month_spend) + '</span>'
+        + metricsHtml
         + '</li>';
     }).join('') + '</ul>';
 

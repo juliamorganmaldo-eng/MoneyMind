@@ -20,43 +20,53 @@
   <main class="app-main">
     <div class="page-header-row">
       <h1 class="page-title">Subscriptions</h1>
-      <button id="resync-btn" class="btn-ghost btn-inline" type="button">↻ Re-detect</button>
+      <% if (account_count > 0) { %>
+        <button id="resync-btn" class="btn-ghost btn-inline" type="button">↻ Re-detect</button>
+      <% } %>
     </div>
 
-    <section class="panel sub-totals" id="sub-totals" hidden>
-      <div class="sub-total-cell">
-        <div class="sub-total-label">Monthly recurring</div>
-        <div class="sub-total-value" id="sub-monthly">—</div>
-      </div>
-      <div class="sub-total-cell">
-        <div class="sub-total-label">Annualized</div>
-        <div class="sub-total-value" id="sub-annual">—</div>
-      </div>
-    </section>
+    <% if (account_count === 0) { %>
+      <section class="panel">
+        <%- include('partials/no-accounts-cta', { message: 'Connect a bank to detect recurring charges. We need a few months of transactions to spot subscription patterns.' }) %>
+      </section>
+    <% } else { %>
+      <section class="panel sub-totals" id="sub-totals" hidden>
+        <div class="sub-total-cell">
+          <div class="sub-total-label">Monthly recurring</div>
+          <div class="sub-total-value" id="sub-monthly">—</div>
+        </div>
+        <div class="sub-total-cell">
+          <div class="sub-total-label">Annualized</div>
+          <div class="sub-total-value" id="sub-annual">—</div>
+        </div>
+      </section>
 
-    <div id="sub-error" class="alert alert-error" hidden></div>
-    <div id="sub-status" class="alert alert-info" hidden></div>
+      <div id="sub-error" class="alert alert-error" hidden></div>
+      <div id="sub-status" class="alert alert-info" hidden></div>
 
-    <section class="panel">
-      <h2 class="panel-title">Active Subscriptions</h2>
-      <div id="active-list">
-        <div class="empty"><span class="spinner-inline">…</span> Loading…</div>
-      </div>
-    </section>
+      <section class="panel">
+        <h2 class="panel-title">Active Subscriptions</h2>
+        <div id="active-list">
+          <div class="empty"><span class="spinner-inline">…</span> Loading…</div>
+        </div>
+      </section>
 
-    <section class="panel" id="dupes-panel" hidden>
-      <h2 class="panel-title">Potential Duplicates</h2>
-      <div id="dupes-list"></div>
-    </section>
+      <section class="panel" id="dupes-panel" hidden>
+        <h2 class="panel-title">Potential Duplicates</h2>
+        <div id="dupes-list"></div>
+      </section>
 
-    <section class="panel" id="ended-panel" hidden>
-      <h2 class="panel-title">
-        <button id="ended-toggle" class="btn-ghost btn-inline ended-toggle" type="button">▸ Ended Subscriptions <span id="ended-count"></span></button>
-      </h2>
-      <div id="ended-list" hidden></div>
-    </section>
+      <section class="panel" id="ended-panel" hidden>
+        <h2 class="panel-title">
+          <button id="ended-toggle" class="btn-ghost btn-inline ended-toggle" type="button">▸ Ended Subscriptions <span id="ended-count"></span></button>
+        </h2>
+        <div id="ended-list" hidden></div>
+      </section>
+    <% } %>
   </main>
 
-  <script src="/js/subscriptions.js"></script>
+  <% if (account_count > 0) { %>
+    <script src="/js/subscriptions.js"></script>
+  <% } %>
 </body>
 </html>

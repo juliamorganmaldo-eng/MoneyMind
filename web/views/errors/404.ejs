@@ -1,0 +1,28 @@
+<%- include('../partials/head', { title: 'Page not found' }) %>
+<body class="app-body">
+  <%- include('../partials/error-header', { authed }) %>
+
+  <main class="app-main app-main-error">
+    <section class="panel error-panel">
+      <div class="error-emoji" aria-hidden="true">🌿</div>
+      <h1 class="error-heading"><%= heading || "We can't find that page" %></h1>
+      <p class="error-body">
+        <%= body || "The page you tried to open doesn't exist, or it isn't yours." %>
+      </p>
+
+      <% if (authed) { %>
+        <p class="error-suggest">
+          You might be looking for:
+          <a href="/dashboard">Dashboard</a> ·
+          <a href="/transactions">Transactions</a> ·
+          <a href="/findings">Findings</a>
+        </p>
+      <% } else { %>
+        <p class="error-suggest">
+          <a href="/login" class="btn-primary btn-inline">Sign in</a>
+        </p>
+      <% } %>
+    </section>
+  </main>
+</body>
+</html>

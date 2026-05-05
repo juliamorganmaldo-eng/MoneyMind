@@ -1,0 +1,25 @@
+<%- include('../partials/head', { title: "You don't have access" }) %>
+<body class="app-body">
+  <%- include('../partials/error-header', { authed }) %>
+
+  <main class="app-main app-main-error">
+    <section class="panel error-panel">
+      <div class="error-emoji" aria-hidden="true">🔒</div>
+      <h1 class="error-heading"><%= heading || "You don't have access to that" %></h1>
+      <p class="error-body">
+        <%= body || "Your account doesn't have permission to view this page right now." %>
+      </p>
+
+      <% if (typeof next_step !== 'undefined' && next_step) { %>
+        <p class="error-suggest">
+          <a href="<%= next_step.href %>" class="btn-primary btn-inline"><%= next_step.label %></a>
+        </p>
+      <% } else if (authed) { %>
+        <p class="error-suggest">
+          <a href="/dashboard" class="btn-primary btn-inline">Back to dashboard</a>
+        </p>
+      <% } %>
+    </section>
+  </main>
+</body>
+</html>

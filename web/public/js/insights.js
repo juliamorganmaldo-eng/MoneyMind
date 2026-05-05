@@ -33,7 +33,12 @@
       var months = (await r.json()).months || [];
       if (months.length < 2) {
         momChart.className = 'empty';
-        momChart.innerHTML = 'Not enough months of data yet.';
+        // Be specific about what they need: 2 months of synced transactions.
+        // The previous "Not enough months" was vague — users couldn't tell
+        // if they needed to wait, sync, or do something else.
+        momChart.innerHTML = months.length === 0
+          ? 'No spending data this month yet — sync transactions on the dashboard, then check back.'
+          : 'Need at least 2 months of synced transactions to compare.';
         return;
       }
       var prev = months[0], curr = months[1];
@@ -162,7 +167,9 @@
       var plottable = months.filter(function (m) { return m.status === 'ok' && m.savings_rate_pct != null; });
       if (plottable.length === 0) {
         srChart.className = 'empty';
-        srChart.innerHTML = 'No savings-rate history yet (no months with reliable income data).';
+        srChart.innerHTML =
+          'Not enough income data yet — your savings rate trend will appear '
+          + 'once a full month of paychecks is captured.';
         return;
       }
 

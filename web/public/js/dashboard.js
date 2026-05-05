@@ -38,26 +38,41 @@
   }
 
   // ── connect bank (Plaid Link) ─────────────────────────────────────────
-  var connectBtn = document.getElementById('connect-bank');
+  // The page may render either #connect-bank (when items > 0) OR
+  // #connect-bank-hero (when items = 0 and verified) — never both at the
+  // same time per the dashboard.ejs conditional. startLink() needs to
+  // tolerate either being absent: build the trigger list at module load
+  // and disable/enable whichever buttons are actually in the DOM.
+  var connectBtns = ['connect-bank', 'connect-bank-hero']
+    .map(function (id) { return document.getElementById(id); })
+    .filter(Boolean);
   var connectStatus = document.getElementById('connect-status');
 
+  function setConnectDisabled(disabled) {
+    for (var i = 0; i < connectBtns.length; i++) connectBtns[i].disabled = disabled;
+  }
   function showConnect(text, kind) {
+    if (!connectStatus) return;
     connectStatus.textContent = text;
     connectStatus.className = 'alert ' + (kind === 'error' ? 'alert-error' : 'alert-info');
     connectStatus.hidden = false;
   }
-  function clearConnect() { connectStatus.hidden = true; connectStatus.textContent = ''; }
+  function clearConnect() {
+    if (!connectStatus) return;
+    connectStatus.hidden = true;
+    connectStatus.textContent = '';
+  }
 
   async function startLink() {
     clearConnect();
-    connectBtn.disabled = true;
+    setConnectDisabled(true);
     var linkToken;
     try {
       var r = await fetch('/api/plaid/create-link-token', { method: 'POST', credentials: 'same-origin' });
       if (r.status === 403) {
         var j403 = await r.json().catch(function () { return {}; });
         if (j403.error === 'email_not_verified') {
-          connectBtn.disabled = false;
+          setConnectDisabled(false);
           showConnect('Please verify your email before connecting a bank — check your inbox or click "Resend verification" above.', 'error');
           return;
         }
@@ -65,7 +80,7 @@
       if (!r.ok) throw new Error('status ' + r.status);
       linkToken = (await r.json()).link_token;
     } catch (e) {
-      connectBtn.disabled = false;
+      setConnectDisabled(false);
       showConnect('Could not start Plaid Link. Check the server logs.', 'error');
       return;
     }
@@ -85,18 +100,20 @@
           }
           window.location.reload();
         } catch (e) {
-          connectBtn.disabled = false;
+          setConnectDisabled(false);
           showConnect('Could not save the bank: ' + e.message, 'error');
         }
       },
       onExit: function (err) {
-        connectBtn.disabled = false;
+        setConnectDisabled(false);
         if (err) showConnect(err.display_message || err.error_message || 'Plaid Link closed.', 'error');
       },
     });
     handler.open();
   }
-  if (connectBtn) connectBtn.addEventListener('click', startLink);
+  for (var bi = 0; bi < connectBtns.length; bi++) {
+    connectBtns[bi].addEventListener('click', startLink);
+  }
 
   // ── Resend verification (top banner for unverified users) ────────────
   var resendVerifyBtn = document.getElementById('resend-verify-btn');

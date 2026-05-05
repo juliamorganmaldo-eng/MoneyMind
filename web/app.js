@@ -24,6 +24,7 @@ const findingsRoutes = require('./routes/findings');
 const passwordResetRoutes = require('./routes/password-reset');
 const { router: emailVerificationRoutes } = require('./routes/email-verification');
 const { enforceIdleTimeout } = require('./middleware/idle-timeout');
+const { render404, render500 } = require('./lib/render-error');
 
 const PORT = Number(process.env.PORT) || 3001;
 const IS_PROD = process.env.NODE_ENV === 'production';
@@ -140,14 +141,18 @@ app.use(insightsRoutes);
 app.use(userSettingsRoutes);
 app.use(findingsRoutes);
 
+// 404 catch-all: any URL no router handled. Renders the branded
+// errors/404 page (HTML) or {error:'not_found'} (JSON / API clients).
 app.use((req, res) => {
-  res.status(404).send('Not found');
+  render404(req, res);
 });
 
+// Global error middleware. The 4-arg signature is what marks this as
+// an error handler in Express. render500 generates an error_id, logs
+// the stack server-side, and shows ONLY the id to the user.
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, _next) => {
-  console.error('[error]', err.stack || err.message);
-  res.status(500).send('Something went wrong.');
+  render500(req, res, err);
 });
 
 async function main() {

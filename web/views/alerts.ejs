@@ -22,14 +22,22 @@
       Set a threshold per account. When the balance drops below it, you'll see a warning on the dashboard.
     </p>
 
-    <section class="panel">
-      <div id="alerts-error" class="alert alert-error" hidden></div>
-      <div id="alerts-list">
-        <div class="empty"><span class="spinner-inline">…</span> Loading…</div>
-      </div>
-    </section>
+    <% if (account_count === 0) { %>
+      <section class="panel">
+        <%- include('partials/no-accounts-cta', { message: 'Connect a bank to set low-balance alerts on each of your accounts.' }) %>
+      </section>
+    <% } else { %>
+      <section class="panel">
+        <div id="alerts-error" class="alert alert-error" hidden></div>
+        <div id="alerts-list">
+          <div class="empty"><span class="spinner-inline">…</span> Loading…</div>
+        </div>
+      </section>
+    <% } %>
   </main>
 
-  <script src="/js/alerts.js"></script>
+  <% if (account_count > 0) { %>
+    <script src="/js/alerts.js"></script>
+  <% } %>
 </body>
 </html>

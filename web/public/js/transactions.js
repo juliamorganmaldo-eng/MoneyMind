@@ -73,7 +73,16 @@
 
   function renderRows(transactions) {
     if (transactions.length === 0) {
-      tableEl.innerHTML = '<p class="empty">No transactions found. Try a different month or clear filters.</p>';
+      // Two distinct cases at the JS layer:
+      //   1. User has accounts but no transactions at all → suggest Sync
+      //      (this is the brand-new-account case; total_count is 0 AND no
+      //       filters are applied)
+      //   2. Filters returned no rows → suggest changing/clearing filters
+      var hasFilters = !!(state.search || state.account_id);
+      var msg = hasFilters
+        ? 'No transactions match these filters. Try a different month, clear filters, or change the account.'
+        : 'No transactions yet. Try clicking <strong>↻ Sync transactions</strong> on the dashboard, or check back after your bank refreshes.';
+      tableEl.innerHTML = '<p class="empty">' + msg + '</p>';
       return;
     }
     var html = '<ul class="txn-list">' + transactions.map(function (t) {

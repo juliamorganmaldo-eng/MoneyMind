@@ -26,11 +26,42 @@
     <% } %>
 
     <% if (!email_verified) { %>
+      <%# Verify-email banner takes precedence over the first-run welcome:
+          a brand-new user without verification needs to verify FIRST before
+          they can connect a bank, so the welcome's CTA wouldn't work yet. %>
       <div class="banner-verify">
         <span>📬 <strong>Verify your email</strong> to unlock bank connections — check your inbox for the link.</span>
         <button id="resend-verify-btn" type="button" class="btn-ghost btn-inline">Resend verification</button>
         <span id="resend-verify-msg" class="banner-verify-msg" hidden></span>
       </div>
+    <% } else if (items && items.length === 0) { %>
+      <%# First-run welcome — only shown once email is verified AND there
+          are no bank connections yet. The CTA reuses the existing
+          #connect-bank handler in dashboard.js so the Plaid Link drop-in
+          fires the same way as the secondary button below. %>
+      <section class="welcome-hero">
+        <h1>
+          <%
+            // Best-effort first name from the local part of the email.
+            // Fallback to the full email if it's not friendly.
+            var local = (email || '').split('@')[0];
+            var first = local.split(/[._+-]/)[0];
+            var displayName = first && /^[A-Za-z]+$/.test(first)
+              ? first.charAt(0).toUpperCase() + first.slice(1).toLowerCase()
+              : email;
+          %>
+          Welcome to MoneyMind, <%= displayName %>!
+        </h1>
+        <p>
+          MoneyMind tracks your bank accounts in one place, spots
+          recurring charges and price changes, and surfaces findings when
+          something needs your attention.
+        </p>
+        <button id="connect-bank-hero" class="btn-primary" type="button">
+          Connect your first bank
+        </button>
+        <p class="welcome-foot">🔒 Your data is encrypted and only visible to you.</p>
+      </section>
     <% } %>
 
     <%# Findings panel — only rendered if there's something to show. JS sets hidden=false. %>
@@ -42,18 +73,29 @@
       <div id="findings-panel-list"></div>
     </section>
 
-    <section class="panel">
-      <div class="panel-header">
-        <div>
-          <h1>Welcome, <%= email %></h1>
-          <p class="subtitle">Connect a bank to start tracking your accounts.</p>
+    <%# When the first-run welcome hero is showing (verified, 0 items) the
+        secondary "Welcome, [email]" panel + Connect Bank button is
+        redundant — the hero is the CTA. Skip it then. %>
+    <% var heroShown = email_verified && items && items.length === 0; %>
+    <% if (!heroShown) { %>
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <h1>Welcome, <%= email %></h1>
+            <p class="subtitle">Connect a bank to start tracking your accounts.</p>
+          </div>
+          <button id="connect-bank" class="btn-primary btn-inline" type="button">
+            + Connect Bank
+          </button>
         </div>
-        <button id="connect-bank" class="btn-primary btn-inline" type="button">
-          + Connect Bank
-        </button>
-      </div>
+        <div id="connect-status" class="alert" role="status" hidden></div>
+      </section>
+    <% } else { %>
+      <%# Even when hidden, the JS still references #connect-status; render
+          a minimal hidden version so error/info messages from the hero CTA
+          have somewhere to land. %>
       <div id="connect-status" class="alert" role="status" hidden></div>
-    </section>
+    <% } %>
 
     <% if (items && items.length > 0) { %>
       <section class="panel net-headline">
@@ -115,10 +157,13 @@
           <div class="empty"><span class="spinner-inline">…</span> Loading…</div>
         </div>
       </section>
-    <% } else { %>
+    <% } else if (!heroShown) { %>
+      <%# Reached when items=0 but email NOT verified (hero is suppressed
+          in favor of the verify banner above). Keep the legacy "no banks"
+          panel so the user still sees a clear next step after they verify. %>
       <section class="panel">
         <h2 class="panel-title">No banks connected</h2>
-        <p class="empty">Click <strong>+ Connect Bank</strong> to add your first institution.</p>
+        <p class="empty">Verify your email above, then click <strong>+ Connect Bank</strong> to add your first institution.</p>
       </section>
     <% } %>
   </main>

@@ -30,7 +30,8 @@
       infoEl.textContent = rows.length + ' transaction' + (rows.length === 1 ? '' : 's') + ' · total ' + fmtUSD(total);
 
       if (rows.length === 0) {
-        listEl.innerHTML = '<p class="empty">No spending in this category this month.</p>';
+        listEl.innerHTML = '<p class="empty">No transactions in this category this month yet. '
+          + '<a href="/budgets">← Back to all budgets</a></p>';
         return;
       }
       listEl.innerHTML = '<ul class="txn-list">' + rows.map(function (t) {

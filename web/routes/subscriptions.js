@@ -45,9 +45,20 @@ router.get('/api/subscriptions', async (req, res) => {
       if (r.status === 'active') annualTotal += r.monthly_equivalent_cents * 12;
     }
 
+    // Dismissed count drives the empty-state copy on the page — lets the
+    // UI distinguish "we haven't detected any subscriptions" from
+    // "you've dismissed all of them, hit Re-detect to scan again".
+    const { rows: dismissedRows } = await pool.query(
+      `SELECT COUNT(*)::int AS n
+         FROM recurring_charges
+        WHERE user_id = $1 AND is_user_dismissed = TRUE`,
+      [userId]
+    );
+
     res.json({
       subscriptions: enriched,
       annual_total_cents: annualTotal,
+      dismissed_count: dismissedRows[0].n,
     });
   } catch (err) {
     console.error('[subs] list failed:', err.message);

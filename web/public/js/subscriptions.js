@@ -90,11 +90,28 @@
         totalsEl.hidden = false;
       }
 
-      // Active list
+      // Active list — the empty state has three flavors so the copy
+      // matches what's actually true for this user:
+      //   1. Some were detected but ALL were dismissed → say so + offer
+      //      Re-detect (they may want to scan again after recent activity).
+      //   2. Nothing detected yet → suggest waiting (we need a few months
+      //      of transactions to spot patterns).
+      //   3. (No accounts at all is handled by the EJS, never reaches here.)
       activeEl.className = '';
       if (active.length === 0) {
         activeEl.className = 'empty';
-        activeEl.innerHTML = 'No recurring charges detected yet. Sync transactions, then re-detect.';
+        var dismissed = subsJ.dismissed_count || 0;
+        if (dismissed > 0) {
+          activeEl.innerHTML =
+            "You've dismissed all " + dismissed + " detected subscription"
+            + (dismissed === 1 ? '' : 's')
+            + '. Click <strong>↻ Re-detect</strong> above to scan again.';
+        } else {
+          activeEl.innerHTML =
+            'No recurring charges detected yet. We need a few months of '
+            + 'transactions to spot patterns. Try clicking <strong>↻ Re-detect</strong>, '
+            + 'or check back after another sync.';
+        }
       } else {
         activeEl.innerHTML = '<ul class="sub-list">'
           + active.map(function (s) { return rowHtml(s, 'active'); }).join('')

@@ -1,0 +1,20 @@
+<%# Header for branded error pages.
+   When `authed` is true, shows the standard nav so users can keep moving
+   without bouncing through /login. When false, only the brand mark.
+   Each error page passes `authed` explicitly. -%>
+<header class="app-header">
+  <a href="<%= authed ? '/dashboard' : '/login' %>" class="brand brand-link" aria-label="MoneyMind">
+    <span class="brand-mark">◆</span>
+    <span class="brand-name">MoneyMind</span>
+  </a>
+  <% if (authed) { %>
+    <div class="header-actions">
+      <a href="/dashboard"    class="btn-ghost btn-inline">Dashboard</a>
+      <a href="/transactions" class="btn-ghost btn-inline">Transactions</a>
+      <a href="/findings"     class="btn-ghost btn-inline">Findings</a>
+      <form method="POST" action="/logout" class="logout-form">
+        <button type="submit" class="btn-ghost">Log out</button>
+      </form>
+    </div>
+  <% } %>
+</header>

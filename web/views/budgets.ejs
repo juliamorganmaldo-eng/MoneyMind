@@ -22,14 +22,22 @@
       Set a monthly limit for each category. Hit 80% to get a warning, 100% means over.
     </p>
 
-    <section class="panel">
-      <div id="budgets-error" class="alert alert-error" hidden></div>
-      <div id="budgets-list">
-        <div class="empty"><span class="spinner-inline">…</span> Loading…</div>
-      </div>
-    </section>
+    <% if (account_count === 0) { %>
+      <section class="panel">
+        <%- include('partials/no-accounts-cta', { message: 'Connect a bank to start tracking budgets — your spend per category needs transactions to compare against.' }) %>
+      </section>
+    <% } else { %>
+      <section class="panel">
+        <div id="budgets-error" class="alert alert-error" hidden></div>
+        <div id="budgets-list">
+          <div class="empty"><span class="spinner-inline">…</span> Loading…</div>
+        </div>
+      </section>
+    <% } %>
   </main>
 
-  <script src="/js/budgets.js"></script>
+  <% if (account_count > 0) { %>
+    <script src="/js/budgets.js"></script>
+  <% } %>
 </body>
 </html>
