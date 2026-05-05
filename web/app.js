@@ -23,6 +23,7 @@ const userSettingsRoutes = require('./routes/user-settings');
 const findingsRoutes = require('./routes/findings');
 const passwordResetRoutes = require('./routes/password-reset');
 const { router: emailVerificationRoutes } = require('./routes/email-verification');
+const privacyRoutes = require('./routes/privacy');
 const { enforceIdleTimeout } = require('./middleware/idle-timeout');
 const { render404, render500 } = require('./lib/render-error');
 
@@ -127,6 +128,7 @@ app.use(authRoutes);
 // them to /login before they reach their handler.
 app.use(passwordResetRoutes);
 app.use(emailVerificationRoutes);
+app.use(privacyRoutes);
 
 app.use(dashboardRoutes);
 app.use(plaidRoutes);

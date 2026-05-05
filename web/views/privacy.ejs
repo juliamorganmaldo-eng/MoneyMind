@@ -1,0 +1,242 @@
+<%- include('partials/head', { title: 'Privacy Policy — MoneyMind' }) %>
+<body class="app-body">
+  <%- include('partials/error-header', { authed }) %>
+
+  <main class="app-main">
+    <section class="panel">
+      <h1>MoneyMind Privacy Policy</h1>
+      <p class="subtitle">Last updated: May 2, 2026</p>
+
+      <p>
+        MoneyMind is a personal finance app that helps you track your bank accounts,
+        find hidden subscriptions, and understand where your money goes. This policy
+        explains exactly what data MoneyMind collects, what happens to it, and what
+        control you have over it. It is written in plain English, not legal language.
+      </p>
+
+      <p>
+        MoneyMind is built and operated by Julia Maldonado, an individual developer,
+        as a personal project. It is not a bank, a registered financial institution,
+        or a regulated fintech company. You should treat it accordingly.
+      </p>
+
+      <h1>Who We Are</h1>
+      <p>MoneyMind is owned and operated by:</p>
+      <ul>
+        <li>Julia Maldonado, individual sole developer</li>
+        <li>Contact: <a href="mailto:juliamorgan.maldo@gmail.com">juliamorgan.maldo@gmail.com</a></li>
+      </ul>
+      <p>There is no company, no team, and no investors. Just one person.</p>
+
+      <h1>What MoneyMind Does</h1>
+      <p>When you sign up for MoneyMind and connect your bank, the app:</p>
+      <ul>
+        <li>Pulls your account balances and transactions from your bank, through a service called Plaid</li>
+        <li>Categorizes your transactions into spending categories you can rename</li>
+        <li>Detects recurring charges, duplicate subscriptions, and price changes</li>
+        <li>Calculates your net worth and shows month-over-month spending trends</li>
+        <li>Sends you alerts when you exceed budget limits or have a low account balance</li>
+      </ul>
+      <p>
+        MoneyMind does not move money, transfer funds, place trades, or take any action
+        on your bank account. It is a read-only tool.
+      </p>
+
+      <h1>What Data We Collect</h1>
+
+      <h2>From your signup</h2>
+      <ul>
+        <li>Your email address</li>
+        <li>Your password (stored only as a one-way hash; we never see or store the plain password)</li>
+      </ul>
+
+      <h2>From your bank, through Plaid</h2>
+      <ul>
+        <li>The name of your bank (e.g., Chase, Wells Fargo)</li>
+        <li>Your account names, types (checking, savings, credit, investment), and the last 4 digits of account numbers</li>
+        <li>Current and available balances</li>
+        <li>Every transaction MoneyMind can see: date, amount, merchant name, the category Plaid assigns, and any category you assign</li>
+        <li>An encrypted Plaid access token, used by MoneyMind to fetch new transactions on your behalf</li>
+      </ul>
+
+      <h2>Computed by MoneyMind</h2>
+      <ul>
+        <li>Your custom budget categories and category renames</li>
+        <li>Subscription detections and findings from automated analysis</li>
+        <li>Net worth snapshots over time</li>
+        <li>Monthly spending insights and savings rate calculations</li>
+      </ul>
+
+      <h2>Operational data</h2>
+      <ul>
+        <li>Login timestamps and IP addresses (used for rate-limiting and security)</li>
+        <li>Session cookies (so you stay logged in)</li>
+        <li>Records of emails sent to you (account verification, password reset)</li>
+      </ul>
+
+      <h1>How We Get Your Bank Data</h1>
+      <p>
+        MoneyMind does not directly connect to your bank. When you click
+        &ldquo;Connect Bank,&rdquo; you are sent to Plaid, a financial data provider
+        trusted by companies like Venmo, Robinhood, and Mint. You authenticate with
+        your bank inside Plaid's interface. Your bank login credentials never touch
+        MoneyMind's servers.
+      </p>
+      <p>
+        After you authenticate, Plaid gives MoneyMind a secure access token that lets
+        the app pull your transaction and balance data on your behalf. That access
+        token is encrypted at rest in MoneyMind's database. You can revoke MoneyMind's
+        access at any time, either by deleting your account in MoneyMind or by removing
+        MoneyMind from your bank's connected apps list.
+      </p>
+      <p>
+        Plaid has its own privacy policy that governs how they handle your bank data.
+        You can read it at <a href="https://plaid.com/legal" target="_blank" rel="noopener noreferrer">plaid.com/legal</a>.
+      </p>
+
+      <h1>How We Use Your Data</h1>
+      <p>MoneyMind uses your data only to power features for you. Specifically:</p>
+      <ul>
+        <li>To display your balances and transactions inside the app</li>
+        <li>To run categorization, subscription detection, budget alerts, and other features described above</li>
+        <li>To send you transactional emails (account verification, password resets, security alerts)</li>
+      </ul>
+      <p>We do not:</p>
+      <ul>
+        <li>Sell your data to anyone, ever</li>
+        <li>Use your data for advertising</li>
+        <li>Share your data with marketers</li>
+        <li>Use your data to train AI models</li>
+        <li>Aggregate or anonymize your data for resale</li>
+        <li>Send your transaction data to any AI service or large language model</li>
+      </ul>
+
+      <h1>Who Can Access Your Data</h1>
+
+      <h2>You</h2>
+      <p>You can see all of your own data inside the MoneyMind app at any time.</p>
+
+      <h2>Service providers we use</h2>
+      <p>
+        MoneyMind uses three external services to operate. Each has access only to
+        specific data needed for their role:
+      </p>
+      <ul>
+        <li>
+          <a href="https://plaid.com" target="_blank" rel="noopener noreferrer">Plaid (plaid.com)</a>:
+          provides the bank data integration; receives your bank login during connection
+          and your authorized financial data on an ongoing basis.
+        </li>
+        <li>
+          <a href="https://resend.com" target="_blank" rel="noopener noreferrer">Resend (resend.com)</a>:
+          sends transactional emails to you; receives only your email address and the
+          email content (no transaction data is included in email bodies).
+        </li>
+        <li>
+          <a href="https://railway.app" target="_blank" rel="noopener noreferrer">Railway (railway.app)</a>:
+          hosts the application and database; technically stores all your encrypted
+          data on their cloud infrastructure.
+        </li>
+      </ul>
+
+      <h2>Julia, the developer</h2>
+      <p>
+        Honest disclosure: as the developer who builds and operates MoneyMind, I have
+        technical access to the database where your data is stored. I will not look at
+        your data casually or for any reason other than necessary debugging.
+        Specifically, I may need to look at your data when you report an issue you
+        would like me to investigate (for example, if a transaction is showing
+        incorrectly), and only to the extent needed to fix that specific issue.
+      </p>
+      <p>
+        I will never share your data with anyone outside the service providers listed
+        above. I will not browse your transactions, discuss them with anyone, or use
+        them for any purpose unrelated to running MoneyMind.
+      </p>
+      <p>
+        As MoneyMind grows, I plan to add stronger technical separations that limit my
+        own ability to access user data. For now, the protection is a combination of
+        self-restraint, this written commitment, and the fact that you are choosing to
+        use a tool built by someone you know.
+      </p>
+
+      <h1>Security Measures</h1>
+      <p>MoneyMind protects your data through multiple layers:</p>
+      <ul>
+        <li>Your password is stored only as a one-way bcrypt hash. The plain password is never stored or logged.</li>
+        <li>Your Plaid access token is encrypted with AES-256-GCM (the same encryption standard used by U.S. government for classified data) before being stored.</li>
+        <li>All connections to MoneyMind use HTTPS, meaning data in transit is encrypted between your browser and the app.</li>
+        <li>MoneyMind uses multi-tenant data isolation: the database is structured so that one user cannot ever see another user's data, even through application bugs.</li>
+        <li>Login attempts are rate-limited to prevent brute-force attacks.</li>
+        <li>Your session expires after 30 minutes of inactivity, or 12 hours absolute, whichever comes first.</li>
+        <li>All developer accounts that operate MoneyMind (GitHub, Railway, Plaid, email) require two-factor authentication.</li>
+      </ul>
+      <p>
+        No system is perfectly secure. If a security incident affects your data,
+        MoneyMind will notify you by email as soon as it is discovered, and explain
+        what happened and what is being done about it.
+      </p>
+
+      <h1>How Long We Keep Your Data</h1>
+      <p>
+        MoneyMind keeps your data for as long as you have an account. When you delete
+        your account, your data is permanently deleted from the database within 30
+        days. The 30-day window allows for recovery if you delete by accident.
+      </p>
+      <p>
+        Some operational logs (login timestamps, error logs) may persist longer for
+        security and debugging purposes, but these do not contain transaction data.
+      </p>
+
+      <h1>Your Rights and Controls</h1>
+      <p>You can do all of the following at any time:</p>
+      <ul>
+        <li>View all your data inside the app</li>
+        <li>Delete individual budget categories, dismiss findings, or override transaction categorizations</li>
+        <li>Disconnect a bank account, which immediately stops MoneyMind from pulling new data from that account</li>
+        <li>Delete your entire account and all associated data</li>
+      </ul>
+      <p>
+        If you cannot find a control you need or want help with any of the above,
+        email <a href="mailto:juliamorgan.maldo@gmail.com">juliamorgan.maldo@gmail.com</a>.
+      </p>
+
+      <h1>Beta Disclosure</h1>
+      <p>
+        MoneyMind is currently in early beta, used only by a small number of invited
+        friends and family. Things will occasionally break. Some features are still
+        being built. The data you share is real, but the app you are sharing it with
+        is not yet a production-grade financial product.
+      </p>
+      <p>
+        If you are not comfortable with that level of maturity for an app that handles
+        your bank data, you should not use MoneyMind.
+      </p>
+
+      <h1>Changes to This Policy</h1>
+      <p>
+        If MoneyMind makes meaningful changes to this policy (changes to what data is
+        collected, how it is used, or who it is shared with), you will be notified by
+        email at least 14 days before the changes take effect. Smaller clarifications
+        or wording improvements may be made without notice.
+      </p>
+      <p>
+        This policy is dated at the top. The date will update whenever the policy
+        changes.
+      </p>
+
+      <h1>Contact</h1>
+      <p>Questions, concerns, requests, or anything else related to this policy:</p>
+      <ul>
+        <li>Email: <a href="mailto:juliamorgan.maldo@gmail.com">juliamorgan.maldo@gmail.com</a></li>
+        <li>Operator: Julia Maldonado, individual developer</li>
+      </ul>
+      <p>
+        MoneyMind is a personal project, not a company. There is no support team, no
+        ticketing system, and no formal complaint process. There is one person who
+        built this app and will personally respond to your message.
+      </p>
+    </section>
+  </main>
+</body>
+</html>
