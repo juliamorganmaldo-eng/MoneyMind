@@ -320,6 +320,33 @@ form input:focus {
   color: var(--muted);
 }
 
+/* ── Site-wide footer (privacy anchor) ─────────────────────────────── */
+/* Two contexts to render in: inside .app-body (full-width app pages —
+   sits below the main content with breathing room) and inside .auth-card
+   (login/register narrow card — the footer sits OUTSIDE the card via the
+   placement in the EJS, so we add a top margin and center it). */
+.app-footer {
+  text-align: center;
+  color: var(--muted);
+  font-size: .8125rem;
+  padding: 2rem 1rem 1.5rem;
+  margin-top: auto;
+}
+.app-footer a {
+  color: var(--muted);
+  text-decoration: underline;
+}
+.app-footer a:hover { color: var(--green-900); }
+/* Make .app-body a column so margin-top:auto in the footer pins it
+   to the viewport bottom on short pages without overlapping content. */
+.app-body { display: flex; flex-direction: column; min-height: 100vh; }
+/* Auth pages center their card — the footer needs to escape the grid
+   placement. Easiest: make the body a grid with two rows (card, footer)
+   and let the existing place-items only apply to the card via :first-child. */
+.auth-body { grid-template-rows: 1fr auto; }
+.auth-body > .auth-card { align-self: center; justify-self: center; }
+.auth-body > .app-footer { margin-top: 0; }
+
 /* Reusable "no accounts yet" empty-state CTA used inside .panel on /budgets,
    /alerts, /subscriptions, /net-worth, /insights, /transactions. */
 .empty-cta {

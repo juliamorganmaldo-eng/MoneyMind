@@ -412,3 +412,10 @@ CREATE INDEX IF NOT EXISTS idx_security_alerts_sent_user_type_time
 -- pre-check the box on their next visit. Stored as a non-sensitive
 -- mm_remember_pref cookie too, but the column is the source of truth.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS remember_me_default BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- Privacy policy agreement timestamp. Set at signup time when the user
+-- ticks the agreement checkbox in the registration form. Nullable so
+-- existing users (created before the policy was published) don't get
+-- forcibly back-stamped — they'll be prompted to re-agree if/when we
+-- decide to gate features behind it.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_policy_agreed_at TIMESTAMPTZ;

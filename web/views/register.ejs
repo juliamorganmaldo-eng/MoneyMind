@@ -30,12 +30,44 @@
         placeholder="XXXX-XXXX-XXXX"
         value="<%= inviteCode %>" />
 
-      <button type="submit" class="btn-primary">Create account</button>
+      <%# Privacy-policy agreement. The submit button is disabled by
+          default; the inline script below toggles it based on the
+          checkbox state. The server-side handler in routes/auth.js also
+          enforces this — client-side disabling is just a UX nudge,
+          NOT the security boundary. %>
+      <label class="checkbox-row" for="privacyAgreed">
+        <input
+          id="privacyAgreed" name="privacy_agreed" type="checkbox"
+          value="on"
+          <%= (typeof privacyAgreed !== 'undefined' && privacyAgreed) ? 'checked' : '' %> />
+        <span>
+          I have read and agree to the
+          <a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
+        </span>
+      </label>
+
+      <button id="register-submit" type="submit" class="btn-primary"
+              <%= (typeof privacyAgreed !== 'undefined' && privacyAgreed) ? '' : 'disabled' %>>
+        Create account
+      </button>
     </form>
+    <script>
+      // Sync the submit-button disabled state with the agreement checkbox.
+      // Server-side validation also enforces this; the script is just UX.
+      (function () {
+        var cb = document.getElementById('privacyAgreed');
+        var btn = document.getElementById('register-submit');
+        if (!cb || !btn) return;
+        function sync() { btn.disabled = !cb.checked; }
+        cb.addEventListener('change', sync);
+        sync();
+      })();
+    </script>
 
     <p class="foot">
       Already registered? <a href="/login">Sign in</a>
     </p>
   </main>
+  <%- include('partials/footer') %>
 </body>
 </html>

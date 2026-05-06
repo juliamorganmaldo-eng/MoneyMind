@@ -147,16 +147,20 @@ router.post('/login', loginRateLimit, redirectIfAuthed, async (req, res, next) =
 
 
 router.get('/register', redirectIfAuthed, (req, res) => {
-  res.render('register', { error: null, email: '', inviteCode: '' });
+  res.render('register', { error: null, email: '', inviteCode: '', privacyAgreed: false });
 });
 
 router.post('/register', redirectIfAuthed, async (req, res, next) => {
   const email = normalizeEmail(req.body.email);
   const password = typeof req.body.password === 'string' ? req.body.password : '';
   const inviteCode = normalizeCode(req.body.inviteCode);
+  // Privacy-policy agreement: the form sends `privacy_agreed=on` only
+  // when the box is checked (HTML checkbox semantics). We DO NOT trust
+  // the client-side disabled-button — every POST is re-validated here.
+  const privacyAgreed = req.body.privacy_agreed === 'on' || req.body.privacy_agreed === '1';
 
   const render = (error, status = 400) =>
-    res.status(status).render('register', { error, email, inviteCode });
+    res.status(status).render('register', { error, email, inviteCode, privacyAgreed });
 
   try {
     if (!EMAIL_RE.test(email)) return render('Please enter a valid email address.');
@@ -164,6 +168,9 @@ router.post('/register', redirectIfAuthed, async (req, res, next) => {
       return render(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
     }
     if (!inviteCode) return render('Invite code is required.');
+    if (!privacyAgreed) {
+      return render('You must agree to the privacy policy to create an account.');
+    }
 
     const client = await pool.connect();
     try {
@@ -192,8 +199,8 @@ router.post('/register', redirectIfAuthed, async (req, res, next) => {
       const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
       const { rows: inserted } = await client.query(
-        `INSERT INTO users (email, password_hash, invite_code_used)
-         VALUES ($1, $2, $3)
+        `INSERT INTO users (email, password_hash, invite_code_used, privacy_policy_agreed_at)
+         VALUES ($1, $2, $3, NOW())
          RETURNING id`,
         [email, passwordHash, inviteCode]
       );
