@@ -419,3 +419,34 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS remember_me_default BOOLEAN NOT NULL 
 -- forcibly back-stamped — they'll be prompted to re-agree if/when we
 -- decide to gate features behind it.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_policy_agreed_at TIMESTAMPTZ;
+
+-- ── Account deletion (soft-delete with 30-day window) ────────────────
+-- is_deleted flips to TRUE the moment the user confirms account deletion.
+-- Login + forgot-password treat is_deleted=TRUE as "account does not
+-- exist" (generic anti-enumeration response). After 30 days the
+-- scheduled hard-delete script removes the row, FK CASCADE wipes
+-- every user-scoped table (transactions, accounts, findings, etc.).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+
+-- deletion_log: persists past hard-delete so we keep an auditable record
+-- that an account once existed and was deleted. Survives the cascade
+-- because there's no FK to users(id) here.
+--
+-- TODO (GDPR-readiness): if/when MoneyMind adds EU users, consider
+-- storing email_hash (sha256 hex) instead of plaintext email here, so
+-- right-to-erasure requests can be honored without losing the audit
+-- record entirely. For US/beta scope we keep plaintext per spec.
+CREATE TABLE IF NOT EXISTS deletion_log (
+  id          SERIAL PRIMARY KEY,
+  email       TEXT,
+  deleted_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  reason      TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_deletion_log_deleted_at ON deletion_log(deleted_at DESC);
+CREATE INDEX IF NOT EXISTS idx_deletion_log_email      ON deletion_log(email);
+
+-- Optimizes the hard-delete cron's WHERE clause: pull soft-deleted
+-- users whose 30-day window has elapsed.
+CREATE INDEX IF NOT EXISTS idx_users_soft_deleted ON users(deleted_at)
+  WHERE is_deleted = TRUE;

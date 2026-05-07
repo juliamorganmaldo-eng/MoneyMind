@@ -1,0 +1,158 @@
+<%- include('partials/head', { title: 'Settings' }) %>
+<body class="app-body">
+  <header class="app-header">
+    <div class="brand">
+      <span class="brand-mark">◆</span>
+      <span class="brand-name">MoneyMind</span>
+    </div>
+    <div class="header-actions">
+      <a href="/dashboard"     class="btn-ghost btn-inline">← Dashboard</a>
+      <a href="/transactions"  class="btn-ghost btn-inline">Transactions</a>
+      <a href="/categories"    class="btn-ghost btn-inline">Categories</a>
+      <a href="/budgets"       class="btn-ghost btn-inline">Budgets</a>
+      <a href="/subscriptions" class="btn-ghost btn-inline">Subscriptions</a>
+      <a href="/net-worth"     class="btn-ghost btn-inline">Net Worth</a>
+      <form method="POST" action="/logout" class="logout-form">
+        <button type="submit" class="btn-ghost">Log out</button>
+      </form>
+    </div>
+  </header>
+
+  <main class="app-main">
+    <h1 class="page-title">Settings</h1>
+
+    <section class="panel">
+      <h2 class="panel-title">Account</h2>
+      <p class="subtitle" style="margin-bottom: 1.5rem;">
+        Signed in as <strong><%= email %></strong>.
+      </p>
+
+      <div class="settings-row settings-row-danger">
+        <div>
+          <div class="settings-label">Delete account</div>
+          <div class="settings-help">
+            Permanently delete your MoneyMind account. We'll disconnect your
+            bank accounts immediately. Your data is retained for 30 days
+            in case you change your mind, then permanently deleted.
+          </div>
+        </div>
+        <button id="open-delete-modal" type="button" class="btn-danger-link">
+          Delete my account
+        </button>
+      </div>
+    </section>
+  </main>
+
+  <%# Confirmation modal — uses native <dialog>, no JS framework. The
+      submit button is disabled until the user types DELETE (exact case)
+      AND fills the password field. Server still re-validates both. %>
+  <dialog id="delete-modal" class="confirm-modal">
+    <form method="POST" action="/account/delete" id="delete-form">
+      <h2 class="confirm-modal-title">Delete your account?</h2>
+      <p class="confirm-modal-warn">
+        This will permanently delete your MoneyMind account and disconnect
+        your bank accounts. <strong>This action cannot be undone after 30 days.</strong>
+      </p>
+
+      <div id="delete-error" class="alert alert-error" role="alert" hidden></div>
+
+      <label for="delete-confirmation">
+        Type <code>DELETE</code> to confirm
+      </label>
+      <input
+        id="delete-confirmation" name="confirmation" type="text"
+        autocomplete="off" autocapitalize="off" autocorrect="off"
+        spellcheck="false" required />
+
+      <label for="delete-password">Re-enter your password</label>
+      <input
+        id="delete-password" name="password" type="password"
+        autocomplete="current-password" required />
+
+      <div class="confirm-modal-actions">
+        <button type="button" id="cancel-delete" class="btn-ghost btn-inline">Cancel</button>
+        <button type="submit" id="confirm-delete" class="btn-danger" disabled>
+          Delete my account
+        </button>
+      </div>
+    </form>
+  </dialog>
+
+  <script>
+    (function () {
+      var openBtn  = document.getElementById('open-delete-modal');
+      var modal    = document.getElementById('delete-modal');
+      var cancel   = document.getElementById('cancel-delete');
+      var confInp  = document.getElementById('delete-confirmation');
+      var pwInp    = document.getElementById('delete-password');
+      var submit   = document.getElementById('confirm-delete');
+      var errEl    = document.getElementById('delete-error');
+      var form     = document.getElementById('delete-form');
+      if (!openBtn || !modal) return;
+
+      function syncEnabled() {
+        // Enabled only when both fields are valid client-side. The server
+        // re-validates — this is a UX gate, not the security boundary.
+        var typedDelete = confInp.value === 'DELETE';
+        var hasPassword = pwInp.value.length > 0;
+        submit.disabled = !(typedDelete && hasPassword);
+      }
+      function reset() {
+        confInp.value = '';
+        pwInp.value = '';
+        errEl.hidden = true;
+        errEl.textContent = '';
+        syncEnabled();
+      }
+      openBtn.addEventListener('click', function () {
+        reset();
+        modal.showModal();
+        confInp.focus();
+      });
+      cancel.addEventListener('click', function () { modal.close(); });
+      confInp.addEventListener('input', syncEnabled);
+      pwInp.addEventListener('input', syncEnabled);
+
+      // Intercept submit so we can show the server's error inline rather
+      // than navigating to a blank JSON page if password is wrong.
+      form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        submit.disabled = true;
+        var prev = submit.textContent;
+        submit.textContent = 'Deleting…';
+        errEl.hidden = true;
+        try {
+          var body = new URLSearchParams({
+            confirmation: confInp.value,
+            password: pwInp.value,
+          });
+          var r = await fetch('/account/delete', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'content-type': 'application/x-www-form-urlencoded' },
+            body: body.toString(),
+            redirect: 'manual',
+          });
+          // 0 / opaqueredirect / 302 = success path (route redirects to
+          // /account/deleted after destroying the session).
+          if (r.type === 'opaqueredirect' || r.status === 0 || r.status === 302) {
+            window.location.href = '/account/deleted';
+            return;
+          }
+          var j = await r.json().catch(function () { return {}; });
+          errEl.textContent = j.message || ('Could not delete account (status ' + r.status + ').');
+          errEl.hidden = false;
+          submit.textContent = prev;
+          syncEnabled();
+        } catch (e2) {
+          errEl.textContent = 'Network error — please try again.';
+          errEl.hidden = false;
+          submit.textContent = prev;
+          syncEnabled();
+        }
+      });
+    })();
+  </script>
+  <%- include('partials/footer') %>
+</body>
+</html>

@@ -414,3 +414,21 @@ added in later steps before the app is useful or production-ready:
    are not logged to a durable audit trail.
 10. **TLS.** The app serves plain HTTP on `:3001`. Put it behind a TLS
     terminator (or `https` module) before it leaves localhost.
+
+## Account deletion (soft + hard)
+
+Users can delete their own account from `/settings`. The flow is:
+
+- **Soft delete** is immediate: `users.is_deleted=TRUE`, `deleted_at=NOW()`,
+  a `deletion_log` row is inserted (preserving email + timestamp past
+  the eventual hard-delete), Plaid `/item/remove` is called for each
+  bank connection, and the local `plaid_items` rows (with their
+  encrypted access tokens) are dropped. Login + forgot-password both
+  treat `is_deleted=TRUE` as if the account never existed.
+- **Hard delete** runs via `web/scripts/hard-delete-soft-deleted.js` and
+  removes any user with `is_deleted=TRUE AND deleted_at < NOW() - 30 days`.
+  FK CASCADE wipes every user-scoped table; `deletion_log` survives.
+- **Schedule this in production:** Railway cron should invoke
+  `node scripts/hard-delete-soft-deleted.js` once per day. Currently
+  not scheduled — invoke manually until the cron is wired up.
+  `--dry-run` flag previews candidates without deleting.

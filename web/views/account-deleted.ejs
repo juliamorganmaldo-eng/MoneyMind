@@ -1,0 +1,17 @@
+<%- include('partials/head', { title: 'Account deleted — MoneyMind' }) %>
+<body class="app-body">
+  <%- include('partials/error-header', { authed: false }) %>
+
+  <main class="app-main app-main-error">
+    <section class="panel error-panel">
+      <div class="error-emoji" aria-hidden="true">👋</div>
+      <h1 class="error-heading">Your account has been deleted</h1>
+      <p class="error-body">
+        We're sorry to see you go. You'll receive an email confirmation
+        shortly. Your data will be permanently removed within 30 days.
+      </p>
+    </section>
+  </main>
+  <%- include('partials/footer') %>
+</body>
+</html>

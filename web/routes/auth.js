@@ -110,8 +110,12 @@ router.post('/login', loginRateLimit, redirectIfAuthed, async (req, res, next) =
       return render(generic);
     }
 
+    // Soft-deleted users are treated as if the account never existed —
+    // same generic error as wrong-password. The is_deleted=FALSE filter
+    // also keeps DUMMY_HASH timing-equalization working for the "account
+    // was deleted" case (no info-leak via response time).
     const { rows } = await pool.query(
-      'SELECT id, password_hash FROM users WHERE email = $1',
+      'SELECT id, password_hash FROM users WHERE email = $1 AND is_deleted = FALSE',
       [email]
     );
     const user = rows[0];
@@ -177,12 +181,16 @@ router.post('/register', redirectIfAuthed, async (req, res, next) => {
       await client.query('BEGIN');
 
       // Lock the invite row so two concurrent registrations can't share it.
+      // We also check `used_at` because invite_codes.used_by_user_id has
+      // ON DELETE SET NULL — if the original user is hard-deleted, the
+      // FK back-fills NULL but used_at remains. Without the used_at check
+      // an old invite would silently become re-usable by a stranger.
       const { rows: inviteRows } = await client.query(
-        'SELECT code, used_by_user_id, revoked_at FROM invite_codes WHERE code = $1 FOR UPDATE',
+        'SELECT code, used_by_user_id, used_at, revoked_at FROM invite_codes WHERE code = $1 FOR UPDATE',
         [inviteCode]
       );
       const invite = inviteRows[0];
-      if (!invite || invite.used_by_user_id || invite.revoked_at) {
+      if (!invite || invite.used_by_user_id || invite.used_at || invite.revoked_at) {
         await client.query('ROLLBACK');
         return render('That invite code is invalid or has already been used.');
       }

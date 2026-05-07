@@ -347,6 +347,90 @@ form input:focus {
 .auth-body > .auth-card { align-self: center; justify-self: center; }
 .auth-body > .app-footer { margin-top: 0; }
 
+/* ── Settings page (Account section + danger affordances) ─────────── */
+.settings-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 1rem 0 0;
+  border-top: 1px solid var(--border);
+}
+.settings-row:first-of-type { border-top: 0; padding-top: 0; }
+.settings-label { font-weight: 600; color: var(--ink); margin-bottom: .25rem; }
+.settings-help { color: var(--muted); font-size: .875rem; line-height: 1.45; max-width: 480px; }
+
+/* Subdued "Delete my account" affordance — small, muted, NOT a primary
+   button. The destructive intent only surfaces inside the modal. */
+.btn-danger-link {
+  background: transparent;
+  border: 0;
+  padding: .5rem 0;
+  color: #9B2C2C;
+  font-size: .875rem;
+  text-decoration: underline;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-danger-link:hover { color: #7B1D1D; }
+
+/* Confirmation modal — uses native <dialog>. Matches the auth-card
+   look (white card, soft shadow) so it doesn't feel out-of-system. */
+.confirm-modal {
+  border: 0;
+  border-radius: var(--radius);
+  padding: 0;
+  background: transparent;
+  max-width: 460px;
+  width: calc(100vw - 2rem);
+}
+.confirm-modal::backdrop {
+  background: rgba(11, 31, 20, .55);
+}
+.confirm-modal form {
+  background: var(--white);
+  border-radius: var(--radius);
+  padding: 1.75rem 1.75rem 1.5rem;
+  box-shadow: var(--shadow-lg);
+}
+.confirm-modal-title {
+  font-size: 1.25rem;
+  color: #7F1D1D;
+  margin: 0 0 .5rem;
+}
+.confirm-modal-warn {
+  color: var(--ink);
+  font-size: .9375rem;
+  line-height: 1.5;
+  margin: 0 0 1.25rem;
+}
+.confirm-modal code {
+  background: #FEF2F2;
+  color: #7F1D1D;
+  padding: .0625rem .25rem;
+  border-radius: 3px;
+  font-size: .9em;
+}
+.confirm-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: .75rem;
+  margin-top: 1.25rem;
+}
+.btn-danger {
+  width: auto;
+  padding: .625rem 1rem;
+  font-size: .875rem;
+  font-weight: 600;
+  background: #B91C1C;
+  border: 1px solid #B91C1C;
+  color: var(--white);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.btn-danger:hover { background: #991B1B; }
+.btn-danger:disabled { opacity: .5; cursor: not-allowed; }
+
 /* Reusable "no accounts yet" empty-state CTA used inside .panel on /budgets,
    /alerts, /subscriptions, /net-worth, /insights, /transactions. */
 .empty-cta {

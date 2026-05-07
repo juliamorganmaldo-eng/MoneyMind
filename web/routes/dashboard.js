@@ -212,6 +212,25 @@ router.get('/findings', requireAuth, (req, res) => {
   res.render('findings');
 });
 
+router.get('/settings', requireAuth, async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT email FROM users WHERE id = $1 AND is_deleted = FALSE',
+      [req.session.userId]
+    );
+    if (rows.length === 0) {
+      // Soft-deleted user holding a stale session. Force them out.
+      return req.session.destroy(() => {
+        res.clearCookie('moneymind.sid', { path: '/' });
+        res.redirect('/login');
+      });
+    }
+    res.render('settings', { email: rows[0].email });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/subscriptions/:id', requireAuth, async (req, res, next) => {
   try {
     const userId = req.session.userId;

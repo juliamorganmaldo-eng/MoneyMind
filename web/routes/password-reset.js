@@ -48,7 +48,15 @@ router.post('/api/auth/forgot-password', async (req, res) => {
   }
 
   try {
-    const { rows: users } = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+    // is_deleted=FALSE filter: a soft-deleted account must respond
+    // identically to a never-existed email — generic response, no
+    // token issued, no email sent. Otherwise we'd leak that an account
+    // once existed AND signal that resetting won't help (because login
+    // also blocks them), which is worse than the password-reset itself.
+    const { rows: users } = await pool.query(
+      'SELECT id FROM users WHERE email = $1 AND is_deleted = FALSE',
+      [email]
+    );
     if (users.length === 0) return genericForgotResponse(res);
 
     const userId = users[0].id;

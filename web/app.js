@@ -24,6 +24,11 @@ const findingsRoutes = require('./routes/findings');
 const passwordResetRoutes = require('./routes/password-reset');
 const { router: emailVerificationRoutes } = require('./routes/email-verification');
 const privacyRoutes = require('./routes/privacy');
+// Naming note: `accountRoutes` (singular module ./routes/account) is the
+// new account-deletion router. The pre-existing `accountRoutes`
+// imported from `./routes/accounts` (plural) is the /api/accounts
+// endpoint family — distinct file, distinct concerns.
+const accountDeleteRoutes = require('./routes/account');
 const { enforceIdleTimeout } = require('./middleware/idle-timeout');
 const { render404, render500 } = require('./lib/render-error');
 
@@ -129,6 +134,12 @@ app.use(authRoutes);
 app.use(passwordResetRoutes);
 app.use(emailVerificationRoutes);
 app.use(privacyRoutes);
+// accountDeleteRoutes has mixed auth: POST /account/delete uses
+// per-route requireAuth, GET /account/deleted is public (the user just
+// had their session destroyed). Mounted in the public band so
+// /account/deleted isn't gated by a downstream router's
+// `router.use(requireAuth)`.
+app.use(accountDeleteRoutes);
 
 app.use(dashboardRoutes);
 app.use(plaidRoutes);
